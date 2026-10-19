@@ -33,8 +33,7 @@
     if (s.error) return `<p class="msg error">${esc(s.error)}</p>`;
     const l = lineup(s);
     if (!l) return '<p class="msg">Loading…</p>';
-    const { roster, week, slots, leg, matchup, starters, bench, taxi, reserve, editable, taxiEditable } = l;
-    const settings = s.league.settings || {};
+    const { roster, week, leg, matchup, starters, editable } = l;
     const targets = new Set(editable && s.swap ? swapTargets(s.swap, l) : []);
     // Only spots with somewhere to go get a button, so nothing is a dead click.
     const movable = new Set(editable ? spotRefs(l).filter((ref) => swapTargets(ref, l).length) : []);
@@ -49,14 +48,7 @@
       targets,
     };
 
-    const card = (slot, id, spot) => playerCard(ctx, slot, id, spot);
-    const padded = (ids, count) => [...ids, ...Array(Math.max(0, (count || 0) - ids.length)).fill('0')];
     const picked = s.swap && s.players[spotId(s.swap, starters)];
-    const openSpots = (prefix, n, slot) => Array.from({ length: n }, (_, k) => card(slot, '0', `${prefix}:${k}`)).join('');
-    const taxiCards = taxiEditable
-      ? taxi.map((id) => card('TX', id, `t:${id}`)).join('') + openSpots('te', l.taxiRoom, 'TX')
-      : padded(taxi, settings.taxi_slots).map((id) => card('TX', id)).join('');
-    const benchCards = bench.map((id) => card('BN', id, `b:${id}`)).join('') + (taxiEditable ? openSpots('be', l.benchRoom, 'BN') : '');
 
     return `
       ${teamCard(s, roster, week, matchup, leg, starters)}
@@ -70,13 +62,28 @@
         </div>
         ${weekNav(s, week)}
       </div>
-      ${week ? starters.map((id, i) => card(slots[i] ?? 'UTIL', id, `s:${i}`)).join('') : '<p class="msg">Loading week…</p>'}
-      ${week ? `
-        ${benchCards ? `<h3>Bench</h3>${benchCards}` : ''}
-        ${reserve.length || settings.reserve_slots ? `<h3>Injured Reserve</h3>${padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('')}` : ''}
-        ${taxi.length || settings.taxi_slots ? `<div class="section-head taxi-head"><div><h3>Taxi Squad</h3>
-          ${taxiEditable ? `<div class="hint">${esc(taxiRule(l))}</div>` : ''}</div></div>${taxiCards}` : ''}
-        ${picksView(s)}` : ''}`;
+      ${week ? rosterSections(ctx, l) : '<p class="msg">Loading week…</p>'}`;
+  }
+
+  // Every player card needs the week's schedule, so these only render once it's loaded.
+  function rosterSections(ctx, l) {
+    const { s } = ctx;
+    const { slots, starters, bench, taxi, reserve, taxiEditable } = l;
+    const settings = s.league.settings || {};
+    const card = (slot, id, spot) => playerCard(ctx, slot, id, spot);
+    const padded = (ids, count) => [...ids, ...Array(Math.max(0, (count || 0) - ids.length)).fill('0')];
+    const openSpots = (prefix, n, slot) => Array.from({ length: n }, (_, k) => card(slot, '0', `${prefix}:${k}`)).join('');
+    const taxiCards = taxiEditable
+      ? taxi.map((id) => card('TX', id, `t:${id}`)).join('') + openSpots('te', l.taxiRoom, 'TX')
+      : padded(taxi, settings.taxi_slots).map((id) => card('TX', id)).join('');
+    const benchCards = bench.map((id) => card('BN', id, `b:${id}`)).join('') + (taxiEditable ? openSpots('be', l.benchRoom, 'BN') : '');
+    return `
+      ${starters.map((id, i) => card(slots[i] ?? 'UTIL', id, `s:${i}`)).join('')}
+      ${benchCards ? `<h3>Bench</h3>${benchCards}` : ''}
+      ${reserve.length || settings.reserve_slots ? `<h3>Injured Reserve</h3>${padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('')}` : ''}
+      ${taxi.length || settings.taxi_slots ? `<div class="section-head taxi-head"><div><h3>Taxi Squad</h3>
+        ${taxiEditable ? `<div class="hint">${esc(taxiRule(l))}</div>` : ''}</div></div>${taxiCards}` : ''}
+      ${picksView(s)}`;
   }
 
   // The player in a spot ref (see model.spotOf), or null for an open spot.

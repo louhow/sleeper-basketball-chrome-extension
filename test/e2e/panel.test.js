@@ -28,10 +28,14 @@ const TEAM_TAB = `<!doctype html><title>Sleeper</title>
   .empty-panel-container { display: flex; flex-direction: column; align-items: center; height: 242px; }
   .footer { position: absolute; bottom: 0; left: 0; right: 0; height: 95px; text-align: center; }
 </style>
-<div class="center-panel"><div class="league-panel"><div class="league-panel-tabs-wrapper"><div class="postdraft-panel">
+<template id="app"><div class="center-panel"><div class="league-panel"><div class="league-panel-tabs-wrapper"><div class="postdraft-panel">
   <div class="center-tab-selector"><div>MATCHUP</div><div class="selected">TEAM</div><div>LEAGUE</div><div>PLAYERS</div></div>
   <div><div class="empty-panel-container"><p>Team panel not yet available for NBA fantasy.</p><p>Please use the Sleeper mobile app</p><div class="footer">Responsible Play</div></div></div>
-</div></div></div></div>`;
+</div></div></div></div></template>
+<script>
+  // Like Sleeper's React app: the tab (and its placeholder) render after load.
+  setTimeout(() => document.body.append(document.getElementById('app').content.cloneNode(true)), 150);
+</script>`;
 const FAKE_TOKEN = 'e2e-fake-session-token';
 const LOGGED_IN = TEAM_TAB.replace('<title>Sleeper</title>', `<title>Sleeper</title><script>localStorage.setItem('token', '${FAKE_TOKEN}')</script>`);
 const LOGGED_OUT = TEAM_TAB.replace('<title>Sleeper</title>', "<title>Sleeper</title><script>localStorage.removeItem('token')</script>");
@@ -151,6 +155,22 @@ before(async () => {
     const stats = projections.filter((p) => sleeper.finished.has(p.game_id)).map((p) => ({ ...p, category: 'stat' }));
     return route.fulfill({ json: stats });
   });
+  // Checks every frame what the user would see: Sleeper's placeholder, or a
+  // half-built panel (anything before the first full render).
+  await context.addInitScript(() => {
+    window.__paint = { placeholder: false, partial: false, full: false };
+    const tick = () => {
+      const ph = document.querySelector('.empty-panel-container');
+      if (ph && ph.offsetParent !== null) window.__paint.placeholder = true;
+      const root = document.getElementById('sleeper-nba-panel')?.shadowRoot;
+      if (root && !window.__paint.full) {
+        if (root.querySelector('.card, .mu-head, .msg.error')) window.__paint.full = true;
+        else if (root.querySelector('.root')?.childElementCount) window.__paint.partial = true;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   page = context.pages()[0] ?? (await context.newPage());
   page.on('pageerror', (e) => console.error('[pageerror]', e));
 });
@@ -160,6 +180,8 @@ after(() => context?.close());
 test('fills the empty Team tab in place', async () => {
   await page.goto(TEAM_URL);
   await page.locator(panel('.card .days')).first().waitFor({ timeout: 30000 });
+  assert.deepEqual(await page.evaluate(() => window.__paint), { placeholder: false, partial: false, full: true },
+    "never paints Sleeper's placeholder or a half-built panel");
   assert.equal(await page.locator('.empty-panel-container').isVisible(), false, 'placeholder hidden');
   const box = await page.locator('#sleeper-nba-panel').boundingBox();
   const tabs = await page.locator('.center-tab-selector').boundingBox();

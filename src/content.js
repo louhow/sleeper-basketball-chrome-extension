@@ -13,6 +13,9 @@
   const NOTICE_MS = 3000;
   const CLOCK_MS = 60e3;
 
+  // The stylesheet is inlined into each shadow root, so nothing ever paints unstyled.
+  const stylesheet = fetch(chrome.runtime.getURL('src/panel.css')).then((r) => r.text());
+
   let active = null;
 
   // Sleeper is a single-page app, so route changes don't reload content scripts.
@@ -31,8 +34,14 @@
     const host = document.createElement('div');
     host.id = 'sleeper-nba-panel';
     const shadow = host.attachShadow({ mode: 'open' });
-    shadow.innerHTML = `<link rel="stylesheet" href="${chrome.runtime.getURL('src/panel.css')}"><div class="root"></div>`;
+    shadow.innerHTML = '<style></style><div class="root"></div>';
     const root = shadow.querySelector('.root');
+    let styled = false;
+    stylesheet.then((css) => {
+      shadow.querySelector('style').textContent = css;
+      styled = true;
+      schedule();
+    });
     const mountedAt = Date.now();
     let hidden = null; // Sleeper's placeholder, hidden while we fill its spot
 
@@ -60,6 +69,7 @@
       saving: false,
       notice: null, // { kind: 'error' | 'ok', text }
       lockConfirm: null, // player id whose Lock-In is awaiting confirmation
+      ready: false, // first league + week load finished; the panel stays blank until then
     };
     let destroyed = false;
     let disabled = false;
@@ -96,7 +106,8 @@
       if (frame || destroyed) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        if (destroyed) return;
+        // Blank until everything for the first paint is in, like Sleeper's own tabs.
+        if (destroyed || !styled || !(state.ready || state.error)) return;
         const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
         state.now = Date.now();
         root.innerHTML = view.render(state, api.log);
@@ -179,6 +190,8 @@
       state.seasonType = nbaState.season_type;
       if (state.week == null) state.week = state.currentWeek;
       await loadWeek(state.week);
+      state.ready = true;
+      schedule();
     }
 
     // Rosters straight from Sleeper when logged in. The public REST endpoint is
@@ -514,6 +527,10 @@
     return Array.from({ length: PICK_SEASONS }, (_, i) => String(first + i));
   }
 
+  // Runs at document_start: watching the DOM hides Sleeper's placeholder in the
+  // same task React inserts it, before it can paint. Polling is a safety net for
+  // route changes that only touch text or attributes.
+  new MutationObserver(sync).observe(document, { childList: true, subtree: true });
   addEventListener('popstate', sync);
   setInterval(sync, 500);
   sync();

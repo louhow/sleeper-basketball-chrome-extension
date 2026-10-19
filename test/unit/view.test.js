@@ -163,3 +163,10 @@ test('taxi is read-only for other weeks and other teams', () => {
   assert.doesNotMatch(render(taxiState({ week: 2, weeks: { 2: week } }), []), /data-spot="t:/);
   assert.doesNotMatch(render(taxiState({ me: 'u2' }), []), /data-spot="t:/);
 });
+
+test('renders while the week is still loading (taxi editable, no schedule yet)', () => {
+  const s = taxiState({ weeks: {} });
+  const out = text(render(s, []));
+  assert.match(out, /Week 1 .* Loading week…/);
+  assert.doesNotMatch(out, /Taxi Squad/, 'player cards wait for the schedule');
+});
