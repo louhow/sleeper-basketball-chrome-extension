@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test 'test/unit/*.test.js'",
+    "test": "TZ=America/New_York node --test 'test/unit/*.test.js'",
     "test:e2e": "node --test 'test/e2e/*.test.js'"
   },
   "devDependencies": {

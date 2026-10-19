@@ -1,9 +1,11 @@
 # Sleeper NBA Team
 
-Chrome extension (MV3) that fills Sleeper's empty NBA Team tab (`sleeper.com/leagues/<id>/team`) with the layout from the mobile app.
+Chrome extension (MV3) that fills Sleeper's empty NBA Team and Matchup tabs (`sleeper.com/leagues/<id>/team` and `/matchup`) with the layouts from the mobile app.
 It also logs every API call it makes, with status, timing, size and a JSON preview, to support probing the API.
 
 ## What it shows
+
+### Team
 
 - Team card: avatar, record, this week's points, Lock-In projection, opponent.
 - Starters, bench, injured reserve and taxi squad, each player with a Monday-Sunday strip of games: projected points (actual once played), opponent, tip-off time.
@@ -12,6 +14,16 @@ It also logs every API call it makes, with status, timing, size and a JSON previ
 - Lineup swaps on your own roster: tap a slot badge, then one of the highlighted players (G takes PG/SG, F takes SF/PF, UTIL and bench take anyone).
 
 The projection follows Lock-In rules: an unlocked player scores their final game of the week, so that game's projection is the default.
+
+### Matchup
+
+- Both teams side by side: points, projection, win probability, record and standings rank, and how many starters are yet to play.
+- Each starter against the opposing starter in the same slot, then bench, IR and taxi.
+- Per player: the game that matters for Lock-In (the locked game, the one that can be locked, or the next one), its points or projection, and team logos for the week's games.
+- Lock-In for your own starters: once a game ends, `LOCK-IN` stays open until that player's next game starts. Locking is final, so it asks to confirm.
+
+Win probability is Sleeper's own formula, ported from its web app: each side is a normal distribution centred on its projection, narrowing as the score approaches it.
+Rank comes from `roster_standings`; before any games are played, it falls back to the standings order (record, points, then waiver order), which is what Sleeper shows then.
 
 ## Logged-in features
 
@@ -22,6 +34,7 @@ It enables:
 - `me`: which roster is yours (swaps are only offered there, for the current and future weeks).
 - `matchup_legs(league_id, round)`: the week's saved lineup, Sleeper's own projection (`proj_points`) and Lock-In picks (`starters_games`, shown with a lock).
 - `update_matchup_leg(...)` during the season, `roster_update_starters(...)` outside it: saving a swap.
+- `update_matchup_leg(..., starters_games: $starters_games)`: Lock-In. The variable is the week's full player -> game map as JSON, with the new lock added.
 
 ## Install
 
@@ -49,6 +62,7 @@ After editing source files, hit the reload icon on the extension card and refres
 | `GET /stats/nba/<season>/<week>` | Per-game actual stats |
 | `GET /players/nba/research/<type>/<season>/<week>?league_type=` | Rostered and start percentages |
 | `POST sleeper.com/graphql` `scores(...)` | Game times and home/away |
+| `POST sleeper.com/graphql` `roster_standings(...)` | Standings rank |
 | `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters` | Logged-in lineup data and saving swaps (see above) |
 
 ## Tests
@@ -61,4 +75,5 @@ npm run test:e2e  # headless Chromium with the extension loaded
 
 Logged-out visitors get redirected away from league pages, so the e2e test serves a stand-in page that mirrors the empty Team tab's markup, and keeps public API calls live.
 Authenticated GraphQL calls are answered by a mock in the test, so tests never change a real lineup.
+The Lock-In test fakes a mid-week state (each team's first game finished, projections standing in for stats), since nothing is lockable before games are played.
 Screenshots land in `test-results/`.

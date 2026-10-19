@@ -562,3 +562,294 @@ ol.calls {
 .calls a:hover {
   text-decoration: underline;
 }
+
+/* Matchup */
+.mu-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.mu-head .vs {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: #1b2433;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+.mu-team {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-areas: "av who pts" "bar bar bar" "meta meta meta";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+.mu-team.theirs {
+  grid-template-columns: auto minmax(0, 1fr) 48px;
+  grid-template-areas: "pts who av" "bar bar bar" "meta meta meta";
+  text-align: right;
+}
+.mu-team.bye {
+  display: grid;
+  place-items: center;
+}
+.mu-team .avatar {
+  grid-area: av;
+  width: 48px;
+  height: 48px;
+}
+.mu-who {
+  grid-area: who;
+  min-width: 0;
+}
+.mu-who .team-name {
+  font-size: 16px;
+}
+.mu-pts {
+  grid-area: pts;
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mu-bar {
+  grid-area: bar;
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.mu-team.theirs .mu-bar {
+  justify-content: flex-end;
+}
+.mu-bar span {
+  border-radius: 2px;
+}
+.mu-bar .up,
+.mu-meta b.up {
+  background: var(--accent);
+  color: var(--accent);
+}
+.mu-bar .down,
+.mu-meta b.down {
+  background: var(--danger);
+  color: var(--danger);
+}
+.mu-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mu-meta b {
+  background: none !important;
+  font-weight: 900;
+}
+.mu-meta .proj {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.mu-team.theirs .mu-meta {
+  flex-direction: row-reverse;
+}
+.mu-team.theirs .mu-meta .proj {
+  margin-left: 0;
+  margin-right: auto;
+}
+.ytp {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+.mu-row > .slot {
+  margin-top: 12px;
+}
+.mp {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.mp.empty {
+  display: grid;
+  place-items: center;
+  min-height: 60px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.mp.empty:not(:has(.name)) {
+  border-style: dashed;
+  background: transparent;
+}
+.mp.is-locked {
+  border-color: rgba(248, 210, 75, 0.45);
+}
+.mp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mp.theirs .mp-head,
+.mp.theirs .mp-box {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.mp-head .headshot {
+  width: 36px;
+  height: 36px;
+}
+.mp-id {
+  flex: 1;
+  min-width: 0;
+}
+.mp-id .name {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-id .sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-id .pos {
+  font-size: 11px;
+}
+.mp-id .team {
+  font-size: 11px;
+}
+.mp-pts {
+  flex: none;
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mp-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+}
+.mp-game {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mp-game b {
+  font-size: 13px;
+}
+.mp-game .sub,
+.mp-val .sub {
+  font-size: 11px;
+}
+.mp-val {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+.mp.theirs .mp-val {
+  align-items: flex-start;
+}
+.lk {
+  flex: none;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+button.lk.open {
+  background: rgba(0, 206, 184, 0.16);
+  color: var(--accent);
+}
+button.lk.open:hover:not(:disabled) {
+  background: rgba(0, 206, 184, 0.28);
+}
+.lk.locked {
+  color: var(--warn);
+}
+.lk-confirm {
+  display: flex;
+  gap: 4px;
+}
+button.lk.go {
+  background: var(--warn);
+  color: #1a1400;
+}
+button.lk.go:hover:not(:disabled) {
+  background: #ffe27a;
+}
+button.lk.cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.mp-games {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.mp.theirs .mp-games {
+  justify-content: flex-end;
+}
+.chip {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+.chip img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.chip.done {
+  opacity: 0.45;
+}
+.chip.current {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.chip.locked {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--warn);
+}

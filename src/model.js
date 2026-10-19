@@ -124,5 +124,81 @@
     return next;
   }
 
-  return { weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, swapTargets, applySwap };
+  // Lock-In picks map player id -> game id (Sleeper's apps read them that way).
+  const lockedGameId = (value) => (value && typeof value === 'object' ? value.game_id ?? value.id : value) ?? null;
+
+  // Where a player stands under Lock-In rules this week:
+  // - a finished game can be locked until the player's next game starts;
+  // - a lock is final, and only one game counts;
+  // - with no lock, the final game of the week counts.
+  function lockState(days, lockValue, now = Date.now()) {
+    const games = days.filter((d) => d.game);
+    const lockId = lockedGameId(lockValue);
+    const locked = lockId == null ? null : games.find((d) => String(d.game.id) === String(lockId)) ?? null;
+    const lastDone = games.filter((d) => d.game.status === 'complete').at(-1) ?? null;
+    const next = games.find((d) => d.game.status !== 'complete') ?? null;
+    const nextStarted = Boolean(next) && (next.game.status === 'in_game' || (next.game.start != null && next.game.start <= now));
+    const lockable = !locked && Boolean(lastDone) && !nextStarted;
+    const counted = locked ?? (next ? null : games.at(-1) ?? null);
+    return {
+      games,
+      locked,
+      lockable,
+      // The game to show: the lock, else the one that can be locked, else what's next.
+      current: locked ?? (lockable ? lastDone : next ?? lastDone),
+      counted,
+      points: counted ? counted.actual ?? 0 : null,
+      yetToPlay: !locked && Boolean(next),
+    };
+  }
+
+  // Sleeper's win probability (ported from its web app): each side is a normal
+  // distribution centred on its projection, tighter as the current score nears it.
+  function erfc(x) {
+    const z = Math.abs(x);
+    const t = 1 / (1 + z / 2);
+    const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 +
+      t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+    return x >= 0 ? r : 2 - r;
+  }
+  const clamp = (lo, hi, v) => Math.max(lo, Math.min(hi, v || 0));
+
+  function winProbability(current1, proj1, current2, proj2) {
+    const r2 = (n) => Number(n.toFixed(2));
+    if (r2(current1) === r2(proj1) && r2(current2) === r2(proj2)) {
+      const a = r2(current1);
+      const b = r2(current2);
+      return a === b ? [0, 0] : a > b ? [1, 0] : [0, 1];
+    }
+    const spread = (current, proj) => {
+      const n = 1 + 10 * (1 - current / proj);
+      const variance = Math.sqrt((current - proj) ** 2 / n) ** 2 || 0.1;
+      return { mean: proj, variance };
+    };
+    const a = spread(current1, proj1);
+    const b = spread(current2, proj2);
+    const mean = a.mean - b.mean;
+    const sd = Math.sqrt(a.variance + b.variance);
+    const cdf0 = 0.5 * erfc(mean / (sd * Math.SQRT2));
+    const p1 = clamp(0.01, 0.99, 1 - cdf0);
+    return [p1, clamp(0.01, 0.99, 1 - p1)];
+  }
+
+  // roster_id -> rank. Uses Sleeper's roster_standings when it has rows; before
+  // any games it falls back to the standings order (record, points, then waiver order).
+  function standingsRanks(rosters, standings) {
+    if (standings?.length) return Object.fromEntries(standings.map((s) => [s.roster_id, s.rank]));
+    const pts = (r) => (r.settings?.fpts ?? 0) + (r.settings?.fpts_decimal ?? 0) / 100;
+    const order = [...rosters].sort((a, b) =>
+      (b.settings?.wins ?? 0) - (a.settings?.wins ?? 0) ||
+      (b.settings?.ties ?? 0) - (a.settings?.ties ?? 0) ||
+      pts(b) - pts(a) ||
+      (a.settings?.waiver_position ?? 0) - (b.settings?.waiver_position ?? 0));
+    return Object.fromEntries(order.map((r, i) => [r.roster_id, i + 1]));
+  }
+
+  return {
+    weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, swapTargets, applySwap,
+    lockedGameId, lockState, winProbability, standingsRanks,
+  };
 })();

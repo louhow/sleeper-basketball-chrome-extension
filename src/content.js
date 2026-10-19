@@ -1,31 +1,33 @@
-// Fills Sleeper's empty NBA Team tab (sleeper.com/leagues/<id>/team) with the
-// roster, weekly schedule and projections. Falls back to a floating panel when
-// the page has no placeholder to fill.
+// Fills Sleeper's empty NBA Team and Matchup tabs (sleeper.com/leagues/<id>/team
+// and /matchup) with rosters, schedules, projections, lineup swaps and Lock-In.
+// Falls back to a floating panel when the page has no placeholder to fill.
 (() => {
-  const { createApi, view, model, scoring } = globalThis.SNP;
-  const ROUTE = /^\/leagues\/(\d+)\/team\/?$/;
+  const { createApi, view, model, scoring, ui } = globalThis.SNP;
+  const ROUTE = /^\/leagues\/(\d+)\/(team|matchup)\/?$/;
   const PLAYERS_PATH = '/v1/players/nba';
-  const PLAYERS_KEY = 'players:nba:v2';
+  const PLAYERS_KEY = 'players:nba:v3';
   const PLAYERS_TTL_MS = 12 * 3600e3;
   // Sleeper only allows trading picks this many seasons ahead; it isn't exposed per league.
   const PICK_SEASONS = 3;
   const FLOAT_AFTER_MS = 4000;
   const NOTICE_MS = 3000;
+  const CLOCK_MS = 60e3;
 
   let active = null;
 
   // Sleeper is a single-page app, so route changes don't reload content scripts.
   // Polling also re-attaches the panel if React re-renders the tab.
   function sync() {
-    const leagueId = location.pathname.match(ROUTE)?.[1] ?? null;
+    const [, leagueId = null, page = null] = location.pathname.match(ROUTE) ?? [];
     if (leagueId !== (active?.leagueId ?? null)) {
       active?.destroy();
-      active = leagueId ? mount(leagueId) : null;
+      active = leagueId ? mount(leagueId, page) : null;
     }
+    active?.show(page);
     active?.attach();
   }
 
-  function mount(leagueId) {
+  function mount(leagueId, page) {
     const host = document.createElement('div');
     host.id = 'sleeper-nba-panel';
     const shadow = host.attachShadow({ mode: 'open' });
@@ -36,7 +38,9 @@
 
     const state = {
       leagueId,
-      tab: 'team',
+      page, // 'team' | 'matchup', from the URL
+      tab: 'page', // 'page' | 'api'
+      now: Date.now(),
       error: null,
       league: null,
       usersById: null,
@@ -55,6 +59,7 @@
       swap: null, // lineup spot picked to swap, e.g. 's:2' or 'b:<player id>'
       saving: false,
       notice: null, // { kind: 'error' | 'ok', text }
+      lockConfirm: null, // player id whose Lock-In is awaiting confirmation
     };
     let destroyed = false;
     let disabled = false;
@@ -93,6 +98,7 @@
         frame = 0;
         if (destroyed) return;
         const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
+        state.now = Date.now();
         root.innerHTML = view.render(state, api.log);
         const body = root.querySelector('.body');
         if (body) body.scrollTop = scrollTop;
@@ -119,6 +125,8 @@
       for (const [id, p] of Object.entries(raw)) {
         players[id] = {
           name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+          first: p.first_name,
+          last: p.last_name,
           team: p.team,
           position: p.position,
           positions: p.fantasy_positions || [],
@@ -205,13 +213,19 @@
     date game_id metadata season season_type sport status start_time week
   }
 }`;
-      const [matchups, projections, stats, scores, research, legs] = await Promise.all([
+      const standingsQuery = `query roster_standings {
+  roster_standings(league_id: ${JSON.stringify(leagueId)}, round: ${Number(week)}) { roster_id rank }
+}`;
+      const [matchups, projections, stats, scores, research, legs, standings] = await Promise.all([
         api.get(`/v1/league/${leagueId}/matchups/${week}`),
         api.get(`/projections/nba/${season}/${week}?season_type=${seasonType}`),
         api.get(`/stats/nba/${season}/${week}?season_type=${seasonType}`),
         api.graphql(`scores (week ${week})`, scoresQuery),
         api.get(`/players/nba/research/${seasonType}/${season}/${week}?league_type=${league.settings?.type ?? 0}`),
         loadLegs(week),
+        api.graphql(`roster_standings (week ${week})`, standingsQuery)
+          .then((data) => data?.roster_standings ?? [])
+          .catch(() => []),
       ]);
       const games = scores?.scores || [];
       const scoringSettings = league.scoring_settings || {};
@@ -223,6 +237,7 @@
         actual: model.pointsByGame(stats || [], scoringSettings, scoring.scoreStats),
         research: research || {},
         legs,
+        ranks: model.standingsRanks(state.rosters, standings),
       };
       schedule();
     }
@@ -245,18 +260,27 @@
       }
     }
 
+    // Writes the week's matchup leg, as Sleeper's apps do in season. Lock-In
+    // picks travel as a JSON-encoded player -> game map; omit them to leave
+    // existing locks untouched.
+    async function saveLeg(label, rosterId, starters, startersGames) {
+      const { week } = state;
+      const variables = startersGames ? { starters_games: JSON.stringify(startersGames) } : {};
+      await api.graphql(`${label} (week ${week})`, `mutation update_matchup_leg($starters_games: Map) {
+  update_matchup_leg(league_id: ${JSON.stringify(leagueId)}, roster_id: ${Number(rosterId)}, leg: ${Number(week)}, round: ${Number(week)}, starters: ${JSON.stringify(starters)}, starters_games: $starters_games) {
+    leg roster_id round starters starters_games
+  }
+}`, { auth: true, variables });
+      state.weeks[week].legs = await loadLegs(week);
+    }
+
     // Saves a lineup the way Sleeper's web app does: during the season starters
     // live on the week's matchup leg; outside it, on the roster itself.
     async function saveStarters(starters) {
-      const { league, rosterId, week } = state;
+      const { league, rosterId } = state;
       const list = JSON.stringify(starters);
       if (league.status === 'in_season') {
-        await api.graphql(`update_matchup_leg (week ${week})`, `mutation update_matchup_leg($starters_games: Map) {
-  update_matchup_leg(league_id: ${JSON.stringify(leagueId)}, roster_id: ${Number(rosterId)}, leg: ${Number(week)}, round: ${Number(week)}, starters: ${list}, starters_games: $starters_games) {
-    leg roster_id round starters starters_games
-  }
-}`, { auth: true });
-        state.weeks[week].legs = await loadLegs(week);
+        await saveLeg('update_matchup_leg', rosterId, starters);
       } else {
         const data = await api.graphql('roster_update_starters', `mutation roster_update_starters {
   roster_update_starters(league_id: ${JSON.stringify(leagueId)}, roster_id: ${Number(rosterId)}, starters: ${list}) {
@@ -268,16 +292,14 @@
       }
     }
 
-    async function swap(fromRef, toRef) {
-      const lineup = view.lineup(state);
-      const next = model.applySwap(fromRef, toRef, lineup.starters, lineup.slots);
-      state.swap = null;
+    // Runs one save at a time and reports how it went.
+    async function save(work, okText, failText) {
       state.saving = true;
       state.notice = null;
       schedule();
       try {
-        await saveStarters(next);
-        const notice = { kind: 'ok', text: 'Lineup saved' };
+        await work();
+        const notice = { kind: 'ok', text: okText };
         state.notice = notice;
         setTimeout(() => {
           if (state.notice !== notice) return;
@@ -285,17 +307,47 @@
           schedule();
         }, NOTICE_MS);
       } catch (err) {
-        console.error('[sleeper-nba-panel] lineup save failed', err);
-        state.notice = { kind: 'error', text: `Couldn't save lineup: ${err.message || err}` };
+        console.error('[sleeper-nba-panel] save failed', err);
+        state.notice = { kind: 'error', text: `${failText}: ${err.message || err}` };
       } finally {
         state.saving = false;
         schedule();
       }
     }
 
+    function swap(fromRef, toRef) {
+      const lineup = ui.lineup(state);
+      const next = model.applySwap(fromRef, toRef, lineup.starters, lineup.slots);
+      state.swap = null;
+      return save(() => saveStarters(next), 'Lineup saved', "Couldn't save lineup");
+    }
+
+    // Locks a starter's most recent finished game. Final, so it's confirmed first.
+    // `ref` is '<roster id>:<player id>', since either side of a matchup can be yours.
+    function lockIn(ref) {
+      const [rosterId, playerId] = [Number(ref.split(':')[0]), ref.split(':')[1]];
+      const lineup = ui.lineup(state, rosterId);
+      const player = state.players[playerId];
+      state.lockConfirm = null;
+      if (!lineup?.lockable || !lineup.starters.includes(playerId)) return;
+      const days = model.playerDays(lineup.week, player?.team, playerId);
+      const st = model.lockState(days, lineup.locks[playerId], Date.now());
+      if (!st.lockable) {
+        state.notice = { kind: 'error', text: 'That game can no longer be locked' };
+        return schedule();
+      }
+      const locks = { ...lineup.locks, [playerId]: st.current.game.id };
+      const name = player?.name || `Player #${playerId}`;
+      return save(
+        () => saveLeg('lock_in', rosterId, lineup.starters, locks),
+        `Locked ${name}: ${(st.current.actual ?? 0).toFixed(2)}`,
+        `Couldn't lock ${name}`,
+      );
+    }
+
     function pickSpot(ref) {
       if (state.saving) return;
-      const lineup = view.lineup(state);
+      const lineup = ui.lineup(state);
       if (!lineup.editable) return;
       if (state.swap && state.swap !== ref && model.swapTargets(state.swap, lineup).includes(ref)) {
         swap(state.swap, ref);
@@ -309,6 +361,7 @@
     function setWeek(week) {
       state.week = week;
       state.swap = null;
+      state.lockConfirm = null;
       state.notice = null;
       loadWeek(week).catch(fail);
     }
@@ -321,6 +374,18 @@
       }
       const spot = e.target.closest('[data-spot]');
       if (spot) return pickSpot(spot.dataset.spot);
+      const lock = e.target.closest('[data-lock]');
+      if (lock && !state.saving) {
+        state.lockConfirm = lock.dataset.lock;
+        state.notice = null;
+        return schedule();
+      }
+      const confirm = e.target.closest('[data-lock-confirm]');
+      if (confirm && !state.saving) return lockIn(confirm.dataset.lockConfirm);
+      if (e.target.closest('[data-lock-cancel]')) {
+        state.lockConfirm = null;
+        return schedule();
+      }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (action === 'prev' && state.week > state.minWeek) setWeek(state.week - 1);
       if (action === 'next' && state.week < state.maxWeek) setWeek(state.week + 1);
@@ -330,6 +395,7 @@
       if (e.target.dataset.action !== 'roster') return;
       state.rosterId = Number(e.target.value);
       state.swap = null;
+      state.lockConfirm = null;
       state.notice = null;
       chrome.storage.local.set({ [`roster:${leagueId}`]: state.rosterId });
       updatePicks();
@@ -350,14 +416,28 @@
     }, true);
 
     function onKey(e) {
-      if (e.key === 'Escape' && state.swap) {
+      if (e.key === 'Escape' && (state.swap || state.lockConfirm)) {
         state.swap = null;
+        state.lockConfirm = null;
         schedule();
       }
     }
     document.addEventListener('keydown', onKey);
+    // Lock windows and game states move with the clock.
+    const clock = setInterval(schedule, CLOCK_MS);
+
+    // Same league, other tab (Team <-> Matchup): keep the data, swap the view.
+    function show(next) {
+      if (!next || next === state.page) return;
+      state.page = next;
+      state.swap = null;
+      state.lockConfirm = null;
+      state.notice = null;
+      schedule();
+    }
 
     function teardown() {
+      clearInterval(clock);
       document.removeEventListener('keydown', onKey);
       cancelAnimationFrame(frame);
       host.remove();
@@ -370,7 +450,7 @@
     }
 
     loadLeague().catch(fail);
-    return { leagueId, attach, destroy };
+    return { leagueId, attach, show, destroy };
   }
 
   // The season ends when the league's playoff bracket does. Round count comes

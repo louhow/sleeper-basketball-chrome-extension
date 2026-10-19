@@ -84,3 +84,55 @@ test('applying a swap moves players between slots and the bench', () => {
   assert.deepEqual(plain(model.applySwap('b:c', 's:3', starters, slots)), ['pg', 'sg', 'sf', 'c', 'c2'], 'bench player fills an empty slot');
   assert.deepEqual(plain(model.applySwap('s:2', 'b:pf', starters, slots)), ['pg', 'sg', 'pf', '0', 'c2'], 'benched starter just drops out');
 });
+
+const day = (id, date, status, start, extra = {}) =>
+  ({ date, game: { id, date, status, start: Date.parse(start) }, opponent: 'GSW', home: true, proj: 30, ...extra });
+const NOW = Date.parse('2026-10-22T12:00:00Z');
+
+test('lock-in: a finished game is lockable until the next game starts', () => {
+  const days = [
+    day('g1', '2026-10-21', 'complete', '2026-10-21T23:00:00Z', { actual: 34.5 }),
+    day('g2', '2026-10-23', 'pre_game', '2026-10-23T23:00:00Z'),
+  ];
+  const st = model.lockState(days, undefined, NOW);
+  assert.equal(st.lockable, true);
+  assert.equal(st.current.game.id, 'g1');
+  assert.equal(st.counted, null, 'nothing counts yet');
+  assert.equal(st.yetToPlay, true);
+  const tipped = model.lockState(days, undefined, Date.parse('2026-10-23T23:05:00Z'));
+  assert.equal(tipped.lockable, false, 'window closes at the next tip-off');
+  assert.equal(tipped.current.game.id, 'g2');
+});
+
+test('lock-in: a locked game counts and is final; otherwise the last game counts', () => {
+  const days = [
+    day('g1', '2026-10-21', 'complete', '2026-10-21T23:00:00Z', { actual: 34.5 }),
+    day('g2', '2026-10-23', 'complete', '2026-10-23T23:00:00Z', { actual: 12 }),
+  ];
+  const locked = model.lockState(days, 'g1', NOW);
+  assert.deepEqual([locked.locked.game.id, locked.points, locked.lockable, locked.yetToPlay], ['g1', 34.5, false, false]);
+  const unlocked = model.lockState(days, undefined, NOW);
+  assert.deepEqual([unlocked.counted.game.id, unlocked.points], ['g2', 12]);
+  assert.equal(model.lockState(days, { game_id: 'g1' }, NOW).locked.game.id, 'g1', 'object-shaped locks work too');
+  assert.equal(model.lockState([day('g3', '2026-10-24', 'pre_game', '2026-10-24T23:00:00Z')], undefined, NOW).lockable, false,
+    'nothing to lock before the first game ends');
+});
+
+test("win probability matches Sleeper's (37% vs 63% at 157.23 vs 181.21)", () => {
+  const [a, b] = model.winProbability(0, 157.23, 0, 181.21);
+  assert.equal(Math.round(a * 100), 37);
+  assert.equal(Math.round(b * 100), 63);
+  assert.deepEqual(plain(model.winProbability(120, 120, 100, 100)), [1, 0], 'final scores decide it');
+  const [lo] = model.winProbability(0, 50, 0, 400);
+  assert.equal(lo, 0.01, 'clamped to 1-99%');
+});
+
+test('standings ranks use roster_standings, else record then waiver order', () => {
+  const rosters = [
+    { roster_id: 1, settings: { wins: 0, waiver_position: 14 } },
+    { roster_id: 10, settings: { wins: 0, waiver_position: 3 } },
+    { roster_id: 5, settings: { wins: 1, waiver_position: 7 } },
+  ];
+  assert.deepEqual(plain(model.standingsRanks(rosters, [])), { 5: 1, 10: 2, 1: 3 });
+  assert.deepEqual(plain(model.standingsRanks(rosters, [{ roster_id: 1, rank: 1 }])), { 1: 1 });
+});

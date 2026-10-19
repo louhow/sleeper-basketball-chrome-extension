@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Sleeper NBA Team",
+  "name": "Sleeper NBA",
   "version": "1.0.0",
-  "description": "Fills Sleeper's empty NBA Team tab with your roster, weekly schedule, projections and draft picks, plus a log of every API call it makes.",
+  "description": "Fills Sleeper's empty NBA Team and Matchup tabs: roster, schedule, projections, lineup swaps and Lock-In, plus a log of every API call it makes.",
   "permissions": [
     "storage"
   ],
@@ -18,7 +18,9 @@
         "src/scoring.js",
         "src/model.js",
         "src/api.js",
+        "src/ui.js",
         "src/view.js",
+        "src/matchup.js",
         "src/content.js"
       ],
       "run_at": "document_idle"

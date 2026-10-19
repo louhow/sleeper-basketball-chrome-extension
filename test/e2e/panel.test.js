@@ -11,6 +11,7 @@ const EXT = fileURLToPath(new URL('../..', import.meta.url));
 const OUT = fileURLToPath(new URL('../../test-results/', import.meta.url));
 const LEAGUE = process.env.SLEEPER_LEAGUE_ID || '1374952493246611456';
 const TEAM_URL = `https://sleeper.com/leagues/${LEAGUE}/team`;
+const MATCHUP_URL = `https://sleeper.com/leagues/${LEAGUE}/matchup`;
 const panel = (sel = '') => `#sleeper-nba-panel ${sel}`;
 
 // Same structure, classes and sizes as the logged-in page (inspected 2026-10-19).
@@ -47,7 +48,37 @@ const sleeper = {
   legs: {}, // round -> matchup legs
   mutations: [],
   failNextMutation: false,
+  // When set, each team's first game of the week is reported as finished a few
+  // hours ago, with projections standing in as stats, so Lock-In has something to lock.
+  midWeek: false,
+  finished: new Set(),
 };
+
+// Picks each team's first game of week 1 up front, since the page loads scores
+// and stats in parallel and both mocks need to agree.
+async function startMidWeek() {
+  const res = await fetch('https://sleeper.com/graphql', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query: 'query scores { scores(sport: "nba", season_type: "regular", season: "2026", week: 1) { game_id start_time metadata } }' }),
+  });
+  const { data } = await res.json();
+  const firstByTeam = {};
+  for (const g of data.scores.sort((a, b) => a.start_time - b.start_time)) {
+    for (const t of [g.metadata?.home_team?.team, g.metadata?.away_team?.team]) firstByTeam[t] ??= g.game_id;
+  }
+  sleeper.finished = new Set(Object.values(firstByTeam));
+  sleeper.midWeek = true;
+}
+
+function fakeMidWeek(scores) {
+  for (const g of scores) {
+    if (!sleeper.finished.has(g.game_id)) continue;
+    g.status = 'complete';
+    g.start_time = Date.now() - 3 * 3600e3;
+  }
+  return scores;
+}
 async function seedLegs(round) {
   if (sleeper.legs[round]) return;
   const res = await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/matchups/${round}`);
@@ -59,7 +90,14 @@ async function seedLegs(round) {
 async function answerGraphql(route) {
   const req = route.request();
   const auth = req.headers().authorization;
-  if (!auth) return route.continue(); // public queries like scores stay live
+  if (!auth) {
+    // Public queries like scores stay live, optionally doctored for mid-week.
+    if (!sleeper.midWeek || !/query scores\b/.test(req.postDataJSON().query)) return route.continue();
+    const res = await route.fetch();
+    const body = await res.json();
+    fakeMidWeek(body.data.scores);
+    return route.fulfill({ response: res, json: body });
+  }
   assert.equal(auth, FAKE_TOKEN, 'sends the page session token');
   const { query, variables } = req.postDataJSON();
   const json = (body) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
@@ -76,6 +114,7 @@ async function answerGraphql(route) {
     const rosterId = Number(query.match(/roster_id: (\d+)/)[1]);
     const leg = sleeper.legs[round].find((l) => l.roster_id === rosterId);
     leg.starters = JSON.parse(query.match(/starters: (\[[^\]]*\])/)[1]);
+    if (variables.starters_games) leg.starters_games = JSON.parse(variables.starters_games);
     return json({ data: { update_matchup_leg: leg } });
   }
   return json({ errors: [{ message: `unmocked: ${query.slice(0, 60)}` }] });
@@ -94,6 +133,13 @@ before(async () => {
       ? route.fulfill({ contentType: 'text/html', body: documentBody })
       : route.continue());
   await context.route('https://sleeper.com/graphql', answerGraphql);
+  await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
+    if (!sleeper.midWeek) return route.continue();
+    const url = route.request().url().replace('/stats/', '/projections/');
+    const projections = await (await fetch(url)).json();
+    const stats = projections.filter((p) => sleeper.finished.has(p.game_id)).map((p) => ({ ...p, category: 'stat' }));
+    return route.fulfill({ json: stats });
+  });
   page = context.pages()[0] ?? (await context.newPage());
   page.on('pageerror', (e) => console.error('[pageerror]', e));
 });
@@ -160,11 +206,11 @@ test('logs every API call, including the GraphQL query', async () => {
   await page.locator(panel('ol.calls summary')).filter({ hasText: 'graphql scores' }).first().click();
   await page.locator(panel('pre.request')).waitFor();
   await page.screenshot({ path: `${OUT}api.png` });
-  await page.locator(panel('[data-tab="team"]')).click();
+  await page.locator(panel('[data-tab="page"]')).click();
 });
 
-test('unmounts off the team route and restores the placeholder', async () => {
-  await page.evaluate((id) => history.pushState({}, '', `/leagues/${id}/matchup`), LEAGUE);
+test('unmounts on other league tabs and restores the placeholder', async () => {
+  await page.evaluate((id) => history.pushState({}, '', `/leagues/${id}/league`), LEAGUE);
   await page.locator('#sleeper-nba-panel').waitFor({ state: 'detached' });
   assert.equal(await page.locator('.empty-panel-container').isVisible(), true);
   await page.evaluate(() => history.back());
@@ -248,6 +294,74 @@ test('logged in: the API log tags authenticated calls and never shows the token'
   await page.locator(panel('pre.request')).first().waitFor();
   const html = await page.locator('#sleeper-nba-panel').evaluate((h) => h.shadowRoot.innerHTML);
   assert.ok(!html.includes(FAKE_TOKEN), 'token never rendered');
-  await page.locator(panel('[data-tab="team"]')).click();
+  await page.locator(panel('[data-tab="page"]')).click();
+  documentBody = LOGGED_OUT;
+});
+
+test('matchup: fills the Matchup tab with both teams', async () => {
+  documentBody = LOGGED_OUT;
+  await page.goto(MATCHUP_URL);
+  await page.locator(panel('.mu-head')).waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('.empty-panel-container').isVisible(), false);
+  assert.match(await page.locator(panel('[data-tab="page"]')).textContent(), /Matchup/);
+  const head = await shadowText('.mu-head');
+  assert.match(head, /\d+% WIN.*VS.*\d+% WIN/s);
+  assert.match(head, /\(#\d+\)/, 'standings rank');
+  assert.equal(await page.locator(panel('.mu-row')).first().locator('.mp').count(), 2);
+  assert.ok(await page.locator(panel('.chip img')).count(), 'team logos for the week');
+  assert.ok(!(await page.locator(panel('[data-lock]')).count()), 'no lock controls when logged out');
+  await page.screenshot({ path: `${OUT}matchup.png` });
+});
+
+test('matchup: switching to Team keeps the session and data', async () => {
+  const calls = await page.locator(panel('[data-tab="api"] .count')).textContent();
+  await page.evaluate((id) => history.pushState({}, '', `/leagues/${id}/team`), LEAGUE);
+  await page.locator(panel('.team-card')).waitFor();
+  assert.equal(await page.locator(panel('[data-tab="api"] .count')).textContent(), calls, 'no refetch');
+});
+
+test('matchup: locks in a finished game for your starter', async () => {
+  documentBody = LOGGED_IN;
+  await startMidWeek();
+  sleeper.legs = {};
+  const users = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/users`)).json();
+  const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
+  sleeper.me = users.find((u) => u.display_name === 'louhow').user_id;
+  const myRoster = rosters.find((r) => r.owner_id === sleeper.me);
+
+  await page.goto(MATCHUP_URL);
+  await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
+  const open = page.locator(panel('.mp.mine button.lk.open'));
+  await open.first().waitFor({ timeout: 30000 });
+  assert.ok(!(await page.locator(panel('.mp.theirs button.lk')).count()), "no lock buttons on the opponent's side");
+  await page.screenshot({ path: `${OUT}lock-open.png` });
+
+  const ref = await open.first().getAttribute('data-lock');
+  const [rosterId, playerId] = ref.split(':');
+  assert.equal(Number(rosterId), myRoster.roster_id);
+  const before = sleeper.mutations.length;
+  await open.first().click();
+  const go = page.locator(panel(`[data-lock-confirm="${ref}"]`));
+  assert.match(await go.textContent(), /^Lock \d+\.\d\d$/);
+  assert.notEqual(await go.textContent(), 'Lock 0.00', 'the finished game has stats');
+  assert.equal(sleeper.mutations.length, before, 'nothing saved before confirming');
+  await page.screenshot({ path: `${OUT}lock-confirm.png` });
+  await go.click();
+
+  await page.locator(panel('.notice.ok')).waitFor();
+  assert.match(await shadowText('.notice.ok'), /^Locked .+: \d+\.\d\d$/);
+  assert.equal(sleeper.mutations.length, before + 1);
+  const { query, variables } = sleeper.mutations.at(-1);
+  const locks = JSON.parse(variables.starters_games);
+  assert.ok(sleeper.finished.has(locks[playerId]), 'locks the finished game');
+  const leg = sleeper.legs[1].find((l) => l.roster_id === myRoster.roster_id);
+  assert.match(query, new RegExp(`starters: ${JSON.stringify(leg.starters).replace(/[[\]]/g, '\\$&')}`), 'lineup unchanged');
+  const card = page.locator(panel('.mp.mine.is-locked'));
+  await card.first().waitFor();
+  assert.match(await card.first().textContent(), /LOCKED/);
+  const locked = (await card.first().locator('.mp-pts').textContent()).trim();
+  assert.match(await page.locator(panel('.mu-team.mine .mu-pts')).textContent(), new RegExp(locked.replace('.', '\\.')), 'header counts the locked game');
+  await page.screenshot({ path: `${OUT}lock-done.png` });
+  sleeper.midWeek = false;
   documentBody = LOGGED_OUT;
 });
