@@ -12,6 +12,16 @@ It also logs every API call it makes, with status, timing, size and a JSON previ
 - Rostered and start percentages, as the mobile app shows them (rounded up, for the league's type).
 - Draft picks held, including picks acquired by trade.
 - Lineup swaps on your own roster: tap a slot badge, then one of the highlighted players (G takes PG/SG, F takes SF/PF, UTIL and bench take anyone).
+- Taxi moves on your own roster, following the league's taxi settings (see below). Only badges with a legal move are clickable.
+
+#### Taxi rules
+
+These are ported from Sleeper's web app and match its help article:
+
+- Eligibility: with `taxi_allow_vets`, players with `years_exp <= taxi_years` (0 = no limit); otherwise rookies only.
+- Moving onto taxi (from the bench or a starting slot, or trading places with a taxi player) is allowed until `taxi_deadline`: through that preseason week, or with 4, until the first regular-season game tips off; 0 means no deadline.
+- After the deadline taxi is one-way: a taxi player can only move into an open bench spot, which needs room on the active roster (one player per roster position).
+- Taxi is a roster setting, not a weekly one, so it's edited from the current week.
 
 The projection follows Lock-In rules: an unlocked player scores their final game of the week, so that game's projection is the default.
 
@@ -35,6 +45,7 @@ It enables:
 - `matchup_legs(league_id, round)`: the week's saved lineup, Sleeper's own projection (`proj_points`) and Lock-In picks (`starters_games`, shown with a lock).
 - `update_matchup_leg(...)` during the season, `roster_update_starters(...)` outside it: saving a swap.
 - `update_matchup_leg(..., starters_games: $starters_games)`: Lock-In. The variable is the week's full player -> game map as JSON, with the new lock added.
+- `roster_update_taxi(league_id, roster_id, taxi)`: taxi moves. Saved before any starter change, like Sleeper's web app.
 
 ## Install
 
@@ -63,7 +74,7 @@ After editing source files, hit the reload icon on the extension card and refres
 | `GET /players/nba/research/<type>/<season>/<week>?league_type=` | Rostered and start percentages |
 | `POST sleeper.com/graphql` `scores(...)` | Game times and home/away |
 | `POST sleeper.com/graphql` `roster_standings(...)` | Standings rank |
-| `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters` | Logged-in lineup data and saving swaps (see above) |
+| `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters`, `roster_update_taxi` | Logged-in lineup data, swaps, Lock-In and taxi (see above) |
 
 ## Tests
 

@@ -102,6 +102,14 @@ async function answerGraphql(route) {
   const { query, variables } = req.postDataJSON();
   const json = (body) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   if (/query me\b/.test(query)) return json({ data: { me: { user_id: sleeper.me } } });
+  if (/mutation roster_update_taxi\b/.test(query)) {
+    sleeper.mutations.push({ query, variables });
+    const rosterId = Number(query.match(/roster_id: (\d+)/)[1]);
+    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
+    const roster = rosters.find((r) => r.roster_id === rosterId);
+    roster.taxi = JSON.parse(query.match(/taxi: (\[[^\]]*\])/)[1]);
+    return json({ data: { roster_update_taxi: roster } });
+  }
   const round = Number(query.match(/round: (\d+)/)?.[1]);
   await seedLegs(round);
   if (/query matchup_legs\b/.test(query)) return json({ data: { matchup_legs: sleeper.legs[round] } });
@@ -239,7 +247,7 @@ test('logged in: swaps a bench player into the lineup', async () => {
   await page.goto(TEAM_URL);
   await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
   await page.locator(panel('button.slot')).first().waitFor({ timeout: 30000 });
-  assert.match(await shadowText('.hint'), /Tap on a position button/);
+  assert.match(await shadowText('.section-head:not(.taxi-head) .hint'), /Tap on a position button/);
   assert.match(await shadowText('.team-card'), /proj 157\.23/, 'uses the server projection from matchup_legs');
 
   // Pick the first bench player, then the first highlighted starter slot.
@@ -362,6 +370,75 @@ test('matchup: locks in a finished game for your starter', async () => {
   const locked = (await card.first().locator('.mp-pts').textContent()).trim();
   assert.match(await page.locator(panel('.mu-team.mine .mu-pts')).textContent(), new RegExp(locked.replace('.', '\\.')), 'header counts the locked game');
   await page.screenshot({ path: `${OUT}lock-done.png` });
+  sleeper.midWeek = false;
+  documentBody = LOGGED_OUT;
+});
+
+async function openMyTeam(url) {
+  const users = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/users`)).json();
+  const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
+  sleeper.me = users.find((u) => u.display_name === 'louhow').user_id;
+  const myRoster = rosters.find((r) => r.owner_id === sleeper.me);
+  await page.goto(url);
+  await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
+  await page.locator(panel('.taxi-head .hint')).waitFor({ timeout: 30000 });
+  return myRoster;
+}
+
+// Clicks bench players until one can trade with a taxi player; returns its id.
+async function pickTaxiEligibleBenchPlayer() {
+  const bench = page.locator(panel('.card button.slot.bn[data-spot^="b:"]'));
+  for (let i = 0; i < await bench.count(); i++) {
+    const ref = await bench.nth(i).getAttribute('data-spot');
+    await bench.nth(i).click();
+    await page.locator(panel(`.card.selected [data-spot="${ref}"]`)).waitFor();
+    if (await page.locator(panel('.card.target button.slot.tx')).count()) return ref.slice(2);
+    await page.keyboard.press('Escape');
+    await page.locator(panel('.card.selected')).waitFor({ state: 'detached' });
+  }
+  return null;
+}
+
+test('taxi: before the season, an eligible bench player trades places with a taxi player', async () => {
+  documentBody = LOGGED_IN;
+  sleeper.midWeek = false;
+  const myRoster = await openMyTeam(TEAM_URL);
+  assert.match(await shadowText('.taxi-head .hint'), /can move to taxi until the first game of the regular season tips off/);
+
+  const benchId = await pickTaxiEligibleBenchPlayer();
+  assert.ok(benchId, 'some bench player is taxi-eligible');
+  const target = page.locator(panel('.card.target button.slot.tx[data-spot^="t:"]')).first();
+  const taxiId = (await target.getAttribute('data-spot')).slice(2);
+  await page.screenshot({ path: `${OUT}taxi-picking.png` });
+  const before = sleeper.mutations.length;
+  await target.click();
+
+  await page.locator(panel('.notice.ok')).waitFor();
+  const saved = sleeper.mutations.slice(before);
+  assert.equal(saved.length, 1, 'only taxi changes; starters untouched');
+  assert.match(saved[0].query, new RegExp(`roster_update_taxi\\(league_id: "${LEAGUE}", roster_id: ${myRoster.roster_id}, taxi: `));
+  const taxi = JSON.parse(saved[0].query.match(/taxi: (\[[^\]]*\])/)[1]);
+  assert.ok(taxi.includes(benchId) && !taxi.includes(taxiId), 'bench player in, taxi player out');
+  assert.equal(taxi.length, myRoster.taxi.length);
+  assert.ok(await page.locator(panel(`[data-spot="t:${benchId}"]`)).count(), 'shows on taxi');
+  assert.ok(await page.locator(panel(`[data-spot="b:${taxiId}"]`)).count(), 'displaced player is on the bench');
+  await page.screenshot({ path: `${OUT}taxi-saved.png` });
+  documentBody = LOGGED_OUT;
+});
+
+test('taxi: after the season tips off, nothing moves onto taxi', async () => {
+  documentBody = LOGGED_IN;
+  await startMidWeek();
+  await openMyTeam(TEAM_URL);
+  assert.match(await shadowText('.taxi-head .hint'), /Taxi is locked for the season: players can only move up to the active roster/);
+  assert.equal(await pickTaxiEligibleBenchPlayer(), null, 'no bench player can go to taxi');
+  assert.equal(await page.locator(panel('.card button.slot.tx')).count(), 0, 'roster is full, so taxi players have nowhere to go');
+  assert.equal(await page.locator(panel('.card span.slot.tx')).count(), 3);
+  await page.locator('#sleeper-nba-panel').evaluate((h) => {
+    const head = h.shadowRoot.querySelector('.taxi-head');
+    h.shadowRoot.querySelector('.body').scrollTop = head.offsetTop - 120;
+  });
+  await page.screenshot({ path: `${OUT}taxi-locked.png` });
   sleeper.midWeek = false;
   documentBody = LOGGED_OUT;
 });

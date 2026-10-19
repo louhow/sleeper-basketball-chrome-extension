@@ -97,18 +97,48 @@
     const inSeason = s.league.status === 'in_season';
     const current = Boolean(week) && s.week >= (s.currentWeek ?? s.week);
     const mine = owns(s, roster);
+    const editable = mine && current && (!inSeason || Boolean(leg));
+    const settings = s.league.settings || {};
+    // Active roster = everyone not on IR or taxi; it can hold one player per roster position.
+    const active = (roster.players || []).length - reserve.length - taxi.length;
     return {
-      roster, week, slots, leg, matchup, starters, bench, taxi, reserve, players: s.players,
+      roster, week, slots, leg, matchup, starters, bench, taxi, reserve, players: s.players, settings,
       locks: leg?.starters_games || {},
       mine,
-      editable: mine && current && (!inSeason || Boolean(leg)),
+      editable,
       // Locks only exist on an in-season matchup leg.
       lockable: mine && current && inSeason && Boolean(leg),
+      // Taxi belongs to the roster, not a week, so it's edited from the current week.
+      taxiEditable: editable && (settings.taxi_slots || 0) > 0 && s.week === s.currentWeek,
+      taxiOpen: globalThis.SNP.model.taxiOpen(settings, s.seasonType, s.currentWeek, weekStarted(s)),
+      taxiRoom: Math.max(0, (settings.taxi_slots || 0) - taxi.length),
+      benchRoom: Math.max(0, (s.league.roster_positions || []).length - active),
     };
+  }
+
+  // Whether any game of the current week has tipped off.
+  function weekStarted(s) {
+    const games = s.weeks?.[s.currentWeek]?.games || [];
+    return games.some((g) => g.status !== 'pre_game' || (g.start != null && g.start <= s.now));
+  }
+
+  // One-line summary of the league's taxi rules and whether taxi is open now.
+  function taxiRule(l) {
+    const { settings } = l;
+    const limit = settings.taxi_years === 0 ? 'any experience'
+      : `${settings.taxi_years || 0} or fewer years of experience`;
+    const who = settings.taxi_allow_vets ? `Players with ${limit}` : 'Rookies only';
+    if (!l.taxiOpen) {
+      return `Taxi is locked for the season: players can only move up to the active roster${l.benchRoom ? '' : ' (roster is full)'}.`;
+    }
+    const until = settings.taxi_deadline === 0 ? 'any time'
+      : settings.taxi_deadline === 4 ? 'until the first game of the regular season tips off'
+      : `through preseason week ${settings.taxi_deadline || 1}`;
+    return `${who} can move to taxi ${until}.`;
   }
 
   return {
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
-    gameTime, weekday, slotBadge, weekNav, notice, lineup,
+    gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule,
   };
 })();

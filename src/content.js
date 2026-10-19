@@ -5,7 +5,7 @@
   const { createApi, view, model, scoring, ui } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)\/(team|matchup)\/?$/;
   const PLAYERS_PATH = '/v1/players/nba';
-  const PLAYERS_KEY = 'players:nba:v3';
+  const PLAYERS_KEY = 'players:nba:v4';
   const PLAYERS_TTL_MS = 12 * 3600e3;
   // Sleeper only allows trading picks this many seasons ahead; it isn't exposed per league.
   const PICK_SEASONS = 3;
@@ -131,6 +131,7 @@
           position: p.position,
           positions: p.fantasy_positions || [],
           injury: p.injury_status,
+          years_exp: p.years_exp,
         };
       }
       await chrome.storage.local.set({ [PLAYERS_KEY]: { savedAt: Date.now(), players } });
@@ -175,6 +176,7 @@
       updatePicks();
       const current = Number(nbaState.display_week || nbaState.week || state.minWeek);
       state.currentWeek = Math.min(Math.max(current, state.minWeek), state.maxWeek);
+      state.seasonType = nbaState.season_type;
       if (state.week == null) state.week = state.currentWeek;
       await loadWeek(state.week);
     }
@@ -233,6 +235,7 @@
         matchups: matchups || [],
         days: model.weekDays(games),
         gamesByTeam: model.gamesByTeam(games),
+        games: games.map((g) => ({ start: g.start_time, status: g.status })),
         proj: model.pointsByGame(projections || [], scoringSettings, scoring.scoreStats),
         actual: model.pointsByGame(stats || [], scoringSettings, scoring.scoreStats),
         research: research || {},
@@ -315,11 +318,28 @@
       }
     }
 
+    async function saveTaxi(rosterId, taxi) {
+      const data = await api.graphql('roster_update_taxi', `mutation roster_update_taxi {
+  roster_update_taxi(league_id: ${JSON.stringify(leagueId)}, roster_id: ${Number(rosterId)}, taxi: ${JSON.stringify(taxi)}) {
+    roster_id starters players reserve taxi
+  }
+}`, { auth: true });
+      Object.assign(state.rosters.find((r) => r.roster_id === rosterId), data.roster_update_taxi);
+    }
+
+    // Moves players between two spots. Taxi saves first, like Sleeper's web app,
+    // so a starter displaced by a taxi player lands on an up-to-date roster.
     function swap(fromRef, toRef) {
       const lineup = ui.lineup(state);
-      const next = model.applySwap(fromRef, toRef, lineup.starters, lineup.slots);
+      const next = model.applyMove(fromRef, toRef, lineup);
+      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      const taxiChanged = !same(next.taxi, lineup.taxi);
+      const startersChanged = !same(next.starters, lineup.starters);
       state.swap = null;
-      return save(() => saveStarters(next), 'Lineup saved', "Couldn't save lineup");
+      return save(async () => {
+        if (taxiChanged) await saveTaxi(lineup.roster.roster_id, next.taxi);
+        if (startersChanged) await saveStarters(next.starters);
+      }, 'Lineup saved', "Couldn't save lineup");
     }
 
     // Locks a starter's most recent finished game. Final, so it's confirmed first.

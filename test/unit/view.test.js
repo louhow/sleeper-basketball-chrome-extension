@@ -17,6 +17,7 @@ const week = {
   ],
   days: model.weekDays(games),
   gamesByTeam: model.gamesByTeam(games),
+  games: games.map((g) => ({ start: g.start_time, status: g.status })),
   proj: model.pointsByGame([{ player_id: 'a', game_id: 'g1', stats: { pts: 30.79 } }, { player_id: 'a', game_id: 'g2', stats: { pts: 39.83 } }], { pts: 1 }, scoring.scoreStats),
   actual: model.pointsByGame([{ player_id: 'a', game_id: 'g2', stats: { pts: 12.5 } }], { pts: 1 }, scoring.scoreStats),
   research: { a: { owned: 99.7, started: 97.0 }, b: { owned: 94.3, started: 22.8 } },
@@ -126,4 +127,39 @@ test('logged-in leg data wins: starters, projection and locked games', () => {
   assert.match(out, /PG Jeremiah Fears .* G Luka Doncic/);
   assert.match(html, /class="day game locked"/);
   assert.match(out, /locked 30\.79/);
+});
+
+const taxiState = (overrides = {}) => {
+  // Week 1's first game tips off Oct 21; nothing has been played on Oct 19.
+  const schedule = { ...week, games: [{ start: Date.parse('2026-10-21T23:00:00Z'), status: 'pre_game' }] };
+  const s = state({ me: 'u1', currentWeek: 1, seasonType: 'regular', now: Date.parse('2026-10-19T12:00:00Z'), weeks: { 1: schedule }, ...overrides });
+  s.league.settings = { ...s.league.settings, taxi_slots: 2, taxi_years: 2, taxi_allow_vets: 1, taxi_deadline: 4 };
+  s.rosters[0].taxi = ['t1'];
+  s.rosters[0].players = [...s.rosters[0].players, 't1'];
+  s.players.t1 = { name: 'Taxi Kid', position: 'PG', positions: ['PG'], team: 'ATL', years_exp: 1 };
+  s.players.d.years_exp = 0;
+  return s;
+};
+
+test('taxi is editable before the deadline, with the league rule spelled out', () => {
+  const html = render(taxiState(), []);
+  assert.match(html, /data-spot="t:t1"/);
+  assert.match(html, /data-spot="te:0"/, 'open taxi slot');
+  assert.match(text(html), /Players with 2 or fewer years of experience can move to taxi until the first game of the regular season tips off\./);
+  const picking = render(taxiState({ swap: 'b:d' }), []);
+  assert.match(picking, /<article class="card target">\s*<div class="top">\s*<button class="slot tx" data-spot="t:t1"/);
+});
+
+test('taxi locks once the regular season tips off', () => {
+  const s = taxiState({ now: Date.parse('2026-10-22T12:00:00Z') });
+  const out = text(render(s, []));
+  assert.match(out, /Taxi is locked for the season: players can only move up to the active roster \(roster is full\)\./);
+  const picking = render({ ...s, swap: 'b:d' }, []);
+  assert.doesNotMatch(picking, /class="card target">\s*<div class="top">\s*<button class="slot tx"/, 'no moves onto taxi');
+  assert.doesNotMatch(render(s, []), /data-spot="t:/, 'no dead buttons: a full roster leaves taxi players nowhere to go');
+});
+
+test('taxi is read-only for other weeks and other teams', () => {
+  assert.doesNotMatch(render(taxiState({ week: 2, weeks: { 2: week } }), []), /data-spot="t:/);
+  assert.doesNotMatch(render(taxiState({ me: 'u2' }), []), /data-spot="t:/);
 });

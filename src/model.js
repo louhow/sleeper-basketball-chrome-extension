@@ -57,7 +57,7 @@
   // so that game's projection is the player's default weekly projection.
   function lockInDefault(days) {
     const last = days.filter((d) => d.game).at(-1);
-    return last ? last.proj ?? 0 : null;
+    return last?.proj ?? null;
   }
 
   // Which draft picks a roster holds, given trades. Each pick starts with its
@@ -88,40 +88,99 @@
     return (player.positions || []).some((p) => accepts.includes(p));
   }
 
-  // A lineup spot is a starter slot (by index) or a bench player (by id).
-  // `starters` uses '0' for an empty slot, like Sleeper does.
-  function spotOf(ref, starters, slots) {
-    if (ref.startsWith('s:')) {
-      const index = Number(ref.slice(2));
-      return { ref, index, slot: slots[index] ?? 'UTIL', id: starters[index] };
-    }
-    return { ref, slot: 'BN', id: ref.slice(2) };
+  // Taxi rules, ported from Sleeper's apps. A player qualifies by experience:
+  // up to taxi_years (0 = no limit) when non-rookies are allowed, else rookies only.
+  function taxiEligible(player, settings) {
+    if (!player) return false;
+    const limit = settings.taxi_years === 0 ? Infinity : settings.taxi_years || 0;
+    const exp = Number(player.years_exp);
+    return settings.taxi_allow_vets ? exp <= limit : exp <= 0;
+  }
+
+  // Whether players may move onto taxi now. taxi_deadline is the last preseason
+  // week to do so; 4 means "until the first regular-season game tips off", 0 means
+  // no deadline. Moving off taxi is never restricted.
+  function taxiOpen(settings, seasonType, week, weekStarted) {
+    const deadline = settings.taxi_deadline || 1;
+    if (['post', 'star'].includes(seasonType) && settings.leg === 1) return true;
+    return seasonType === 'off' ||
+      (seasonType === 'pre' && week <= deadline) ||
+      (seasonType === 'regular' && deadline === 4 && week === 1 && !weekStarted) ||
+      settings.taxi_deadline === 0;
+  }
+
+  // A lineup spot, by ref:
+  //   's:<i>'  starter slot i ('0' in starters means empty, like Sleeper)
+  //   'b:<id>' bench player       'be:<k>' open bench spot (roster has room)
+  //   't:<id>' taxi player        'te:<k>' open taxi slot
+  function spotOf(ref, l) {
+    const cut = ref.indexOf(':');
+    const kind = ref.slice(0, cut);
+    const key = ref.slice(cut + 1);
+    if (kind === 's') return { ref, kind, index: Number(key), slot: l.slots[Number(key)] ?? 'UTIL', id: l.starters[Number(key)] };
+    if (kind === 'b' || kind === 'be') return { ref, kind, slot: 'BN', id: kind === 'b' ? key : null };
+    return { ref, kind, slot: 'TX', id: kind === 't' ? key : null };
   }
 
   const occupant = (players, id) => (id && id !== '0' ? players[id] || {} : null);
 
   function canSwap(a, b, players) {
-    if (a.ref === b.ref) return false;
     if (a.slot === 'BN' && b.slot === 'BN') return false;
     if (!occupant(players, a.id) && !occupant(players, b.id)) return false;
     return fits(b.slot, occupant(players, a.id)) && fits(a.slot, occupant(players, b.id));
   }
 
-  // Refs of every spot the selected spot can trade places with.
-  function swapTargets(fromRef, { starters, slots, bench, players }) {
-    const from = spotOf(fromRef, starters, slots);
-    const refs = [...starters.map((_, i) => `s:${i}`), ...bench.map((id) => `b:${id}`)];
-    return refs.filter((ref) => canSwap(from, spotOf(ref, starters, slots), players));
+  // One direction of a taxi move, as Sleeper validates it (from = picked first).
+  function taxiMove(from, to, l) {
+    const pf = occupant(l.players, from.id);
+    const pt = occupant(l.players, to.id);
+    const canTaxi = (p) => l.taxiOpen && taxiEligible(p, l.settings);
+    // Off taxi into an open bench spot: always allowed.
+    if (from.slot === 'TX' && pf) return to.kind === 'be';
+    // Filling an open taxi slot.
+    if (from.slot === 'TX') return Boolean(pt) && to.slot !== 'TX' && canTaxi(pt);
+    // Onto taxi from the bench or a starting slot; a displaced taxi player takes the starter's slot.
+    if (to.slot === 'TX' && pf && canTaxi(pf)) return from.slot === 'BN' || !pt || fits(from.slot, pt);
+    return false;
   }
 
-  // New starters array after swapping two spots; bench is whatever isn't starting.
-  function applySwap(fromRef, toRef, starters, slots) {
-    const a = spotOf(fromRef, starters, slots);
-    const b = spotOf(toRef, starters, slots);
-    const next = [...starters];
-    if (a.index != null) next[a.index] = b.id || '0';
-    if (b.index != null) next[b.index] = a.id || '0';
-    return next;
+  function canMove(a, b, l) {
+    if (a.ref === b.ref) return false;
+    if (a.slot === 'TX' || b.slot === 'TX') return taxiMove(a, b, l) || taxiMove(b, a, l);
+    return canSwap(a, b, l.players);
+  }
+
+  // Every spot in a lineup. Taxi and open bench spots only count when taxi is editable.
+  function spotRefs(l) {
+    const refs = [...l.starters.map((_, i) => `s:${i}`), ...l.bench.map((id) => `b:${id}`)];
+    if (!l.taxiEditable) return refs;
+    const open = (prefix, n) => Array.from({ length: Math.max(0, n) }, (_, k) => `${prefix}:${k}`);
+    return [...refs, ...open('be', l.benchRoom), ...(l.taxi || []).map((id) => `t:${id}`), ...open('te', l.taxiRoom)];
+  }
+
+  // Refs of every spot the selected spot can trade places with.
+  function swapTargets(fromRef, l) {
+    const from = spotOf(fromRef, l);
+    return spotRefs(l).filter((ref) => canMove(from, spotOf(ref, l), l));
+  }
+
+  // Starters and taxi after two spots trade occupants. The bench is implicit:
+  // whoever isn't starting, on taxi or on IR.
+  function applyMove(fromRef, toRef, l) {
+    const a = spotOf(fromRef, l);
+    const b = spotOf(toRef, l);
+    const starters = [...l.starters];
+    let taxi = [...(l.taxi || [])];
+    const place = (spot, id) => {
+      if (spot.kind === 's') starters[spot.index] = id || '0';
+      else if (spot.kind === 't') taxi = id ? taxi.map((x) => (x === spot.id ? id : x)) : taxi.filter((x) => x !== spot.id);
+      else if (spot.kind === 'te' && id) taxi.push(id);
+    };
+    const idOf = (spot) => (spot.id && spot.id !== '0' ? spot.id : null);
+    const [ida, idb] = [idOf(a), idOf(b)];
+    place(a, idb);
+    place(b, ida);
+    return { starters, taxi };
   }
 
   // Lock-In picks map player id -> game id (Sleeper's apps read them that way).
@@ -198,7 +257,8 @@
   }
 
   return {
-    weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, swapTargets, applySwap,
+    weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove,
+    taxiEligible, taxiOpen,
     lockedGameId, lockState, winProbability, standingsRanks,
   };
 })();
