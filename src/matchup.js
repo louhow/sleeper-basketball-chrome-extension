@@ -2,7 +2,7 @@
 // slot, with Lock-In status and the lock control for the logged-in owner.
 (globalThis.SNP ||= {}).matchup = (() => {
   const { playerDays, lockState, lockInDefault, winProbability } = globalThis.SNP.model;
-  const { esc, f2, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, notice, lineup } =
+  const { esc, f2, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, lineup } =
     globalThis.SNP.ui;
 
   function render(s) {
@@ -40,7 +40,6 @@
         </div>
         ${weekNav(s, mine.week)}
       </div>
-      ${notice(s)}
       ${mine.slots.map((slot, i) => row(s, slot, left, mine.starters[i], right, theirs?.starters[i], true)).join('')}
       ${rows('Bench', () => 'BN', mine.bench, theirs?.bench || [])}
       ${rows('Injured Reserve', () => 'IR', mine.reserve, theirs?.reserve || [], settings.reserve_slots)}

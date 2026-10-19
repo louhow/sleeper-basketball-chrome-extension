@@ -199,3 +199,11 @@ test('taxi moves after the deadline: only off taxi, into an open bench spot', ()
   assert.deepEqual(plain(model.swapTargets('t:kid', room)), ['be:0']);
   assert.deepEqual(plain(model.applyMove('t:kid', 'be:0', room)), { starters: room.starters, taxi: [] });
 });
+
+test('describeMove names where each moved player ends up', () => {
+  const l = taxiLineup();
+  const moves = (from, to) => plain(model.describeMove(l, model.applyMove(from, to, l)));
+  assert.deepEqual(moves('b:rookie', 't:kid'), [{ id: 'kid', to: 'bench' }, { id: 'rookie', to: 'taxi' }]);
+  assert.deepEqual(moves('t:kid', 's:0'), [{ id: 'pg', to: 'taxi' }, { id: 'kid', to: 'PG' }]);
+  assert.deepEqual(moves('s:0', 's:1'), [{ id: 'pg', to: 'G' }, { id: 'sg', to: 'PG' }]);
+});

@@ -183,6 +183,21 @@
     return { starters, taxi };
   }
 
+  // Where each player affected by a move ends up: [{ id, to: slot | 'taxi' | 'bench' }].
+  function describeMove(before, after) {
+    const where = (l, id) => {
+      const i = l.starters.indexOf(id);
+      if (i >= 0) return before.slots[i] ?? 'UTIL';
+      return (l.taxi || []).includes(id) ? 'taxi' : 'bench';
+    };
+    const ids = new Set([...before.starters, ...(before.taxi || []), ...after.starters, ...(after.taxi || [])]);
+    return [...ids]
+      .filter((id) => id && id !== '0')
+      .map((id) => ({ id, from: where(before, id), to: where(after, id) }))
+      .filter((m) => m.from !== m.to)
+      .map(({ id, to }) => ({ id, to }));
+  }
+
   // Lock-In picks map player id -> game id (Sleeper's apps read them that way).
   const lockedGameId = (value) => (value && typeof value === 'object' ? value.game_id ?? value.id : value) ?? null;
 
@@ -257,7 +272,7 @@
   }
 
   return {
-    weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove,
+    weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen,
     lockedGameId, lockState, winProbability, standingsRanks,
   };

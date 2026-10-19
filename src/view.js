@@ -10,7 +10,8 @@
     const body = state.tab === 'api' ? apiView(state, log)
       : state.page === 'matchup' ? globalThis.SNP.matchup.render(state)
       : teamView(state);
-    return `<div class="app">${toolbar(state, log)}<div class="body">${body}</div></div>`;
+    // The notice floats over the panel so showing or clearing it never shifts the cards being clicked.
+    return `<div class="app">${toolbar(state, log)}<div class="body">${body}</div>${state.tab === 'api' ? '' : notice(state)}</div>`;
   }
 
   function toolbar(s, log) {
@@ -69,7 +70,6 @@
         </div>
         ${weekNav(s, week)}
       </div>
-      ${notice(s)}
       ${week ? starters.map((id, i) => card(slots[i] ?? 'UTIL', id, `s:${i}`)).join('') : '<p class="msg">Loading week…</p>'}
       ${week ? `
         ${benchCards ? `<h3>Bench</h3>${benchCards}` : ''}

@@ -48,6 +48,7 @@ const sleeper = {
   legs: {}, // round -> matchup legs
   mutations: [],
   failNextMutation: false,
+  rosters: null, // league rosters as the mock's Sleeper currently has them
   // When set, each team's first game of the week is reported as finished a few
   // hours ago, with projections standing in as stats, so Lock-In has something to lock.
   midWeek: false,
@@ -102,11 +103,13 @@ async function answerGraphql(route) {
   const { query, variables } = req.postDataJSON();
   const json = (body) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   if (/query me\b/.test(query)) return json({ data: { me: { user_id: sleeper.me } } });
+  // Rosters live in the mock once fetched, so saves survive a reload like they do on Sleeper.
+  sleeper.rosters ??= await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
+  if (/query league_rosters\b/.test(query)) return json({ data: { league_rosters: sleeper.rosters } });
   if (/mutation roster_update_taxi\b/.test(query)) {
     sleeper.mutations.push({ query, variables });
     const rosterId = Number(query.match(/roster_id: (\d+)/)[1]);
-    const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
-    const roster = rosters.find((r) => r.roster_id === rosterId);
+    const roster = sleeper.rosters.find((r) => r.roster_id === rosterId);
     roster.taxi = JSON.parse(query.match(/taxi: (\[[^\]]*\])/)[1]);
     return json({ data: { roster_update_taxi: roster } });
   }
@@ -422,12 +425,22 @@ test('taxi: before the season, an eligible bench player trades places with a tax
   assert.equal(taxi.length, myRoster.taxi.length);
   assert.ok(await page.locator(panel(`[data-spot="t:${benchId}"]`)).count(), 'shows on taxi');
   assert.ok(await page.locator(panel(`[data-spot="b:${taxiId}"]`)).count(), 'displaced player is on the bench');
+  const message = await shadowText('.notice.ok');
+  assert.match(message, /^Saved: /);
+  assert.match(message, / to taxi\b/, 'says who went to taxi');
+  assert.match(message, / to bench\b/, 'says who went to the bench');
   await page.screenshot({ path: `${OUT}taxi-saved.png` });
+
+  // A reload reads rosters from Sleeper itself, not the CDN-cached public endpoint.
+  await page.reload();
+  await page.locator(panel(`[data-spot="t:${benchId}"]`)).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(panel(`[data-spot="b:${taxiId}"]`)).count(), 'still on the bench after reload');
   documentBody = LOGGED_OUT;
 });
 
 test('taxi: after the season tips off, nothing moves onto taxi', async () => {
   documentBody = LOGGED_IN;
+  sleeper.rosters = null;
   await startMidWeek();
   await openMyTeam(TEAM_URL);
   assert.match(await shadowText('.taxi-head .hint'), /Taxi is locked for the season: players can only move up to the active roster/);

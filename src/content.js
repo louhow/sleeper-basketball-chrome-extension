@@ -151,7 +151,7 @@
       const [nbaState, users, rosters, bracket, traded, drafts, players, prefs, me] = await Promise.all([
         api.get('/v1/state/nba'),
         api.get(`/v1/league/${leagueId}/users`),
-        api.get(`/v1/league/${leagueId}/rosters`),
+        loadRosters(),
         api.get(`/v1/league/${leagueId}/winners_bracket`),
         api.get(`/v1/league/${leagueId}/traded_picks`),
         api.get(`/v1/league/${leagueId}/drafts`),
@@ -179,6 +179,24 @@
       state.seasonType = nbaState.season_type;
       if (state.week == null) state.week = state.currentWeek;
       await loadWeek(state.week);
+    }
+
+    // Rosters straight from Sleeper when logged in. The public REST endpoint is
+    // cached at the CDN for up to ~10 minutes, so it can lag a save the user just made.
+    async function loadRosters() {
+      if (api.loggedIn()) {
+        try {
+          const data = await api.graphql('league_rosters', `query league_rosters {
+  league_rosters(league_id: ${JSON.stringify(leagueId)}) {
+    roster_id owner_id co_owners players starters reserve taxi settings metadata
+  }
+}`, { auth: true });
+          if (data?.league_rosters?.length) return data.league_rosters;
+        } catch (err) {
+          console.warn('[sleeper-nba-panel] league_rosters unavailable, using the public endpoint', err);
+        }
+      }
+      return api.get(`/v1/league/${leagueId}/rosters`);
     }
 
     // Who is logged in, if anyone. Only used to decide which roster can be edited.
@@ -335,11 +353,14 @@
       const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       const taxiChanged = !same(next.taxi, lineup.taxi);
       const startersChanged = !same(next.starters, lineup.starters);
+      const moved = model.describeMove(lineup, next)
+        .map(({ id, to }) => `${ui.shortName(state.players[id] || { name: `Player #${id}` })} to ${to}`)
+        .join(', ');
       state.swap = null;
       return save(async () => {
         if (taxiChanged) await saveTaxi(lineup.roster.roster_id, next.taxi);
         if (startersChanged) await saveStarters(next.starters);
-      }, 'Lineup saved', "Couldn't save lineup");
+      }, `Saved: ${moved}`, `Couldn't move ${moved}`);
     }
 
     // Locks a starter's most recent finished game. Final, so it's confirmed first.

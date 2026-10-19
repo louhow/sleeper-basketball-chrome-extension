@@ -41,6 +41,7 @@ When the page has a Sleeper session, the extension reads its token from `localSt
 The token is never stored, logged or shown; authenticated calls are tagged `auth` in the API log.
 It enables:
 
+- `league_rosters(league_id)`: rosters straight from Sleeper. The public `/rosters` endpoint is cached at the CDN for up to ~10 minutes, so after a save it can show (and a follow-up move could build on) the old roster.
 - `me`: which roster is yours (swaps are only offered there, for the current and future weeks).
 - `matchup_legs(league_id, round)`: the week's saved lineup, Sleeper's own projection (`proj_points`) and Lock-In picks (`starters_games`, shown with a lock).
 - `update_matchup_leg(...)` during the season, `roster_update_starters(...)` outside it: saving a swap.

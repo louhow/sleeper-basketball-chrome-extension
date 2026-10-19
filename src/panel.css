@@ -270,19 +270,32 @@ button.slot:hover {
   color: var(--muted);
   font-size: 12px;
 }
+.app {
+  position: relative;
+}
 .notice {
-  margin: -4px 0 12px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 5;
+  max-width: calc(100% - 48px);
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   font-size: 13px;
   font-weight: 700;
+  pointer-events: none;
 }
 .notice.ok {
-  background: rgba(0, 206, 184, 0.14);
+  background: #0f3b3a;
+  border: 1px solid rgba(0, 206, 184, 0.5);
   color: var(--accent);
 }
 .notice.error {
-  background: rgba(255, 91, 110, 0.14);
+  background: #3d1820;
+  border: 1px solid rgba(255, 91, 110, 0.5);
   color: var(--danger);
 }
 .card {
