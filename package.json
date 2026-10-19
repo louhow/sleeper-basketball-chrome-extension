@@ -1,0 +1,13 @@
+{
+  "name": "sleeper-nba-panel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test 'test/unit/*.test.js'",
+    "test:e2e": "node --test 'test/e2e/*.test.js'"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

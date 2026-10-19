@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Sleeper NBA Team",
+  "version": "1.0.0",
+  "description": "Fills Sleeper's empty NBA Team tab with your roster, weekly schedule, projections and draft picks, plus a log of every API call it makes.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.sleeper.app/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sleeper.com/*"
+      ],
+      "js": [
+        "src/scoring.js",
+        "src/model.js",
+        "src/api.js",
+        "src/view.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/panel.css"
+      ],
+      "matches": [
+        "https://sleeper.com/*"
+      ]
+    }
+  ]
+}
