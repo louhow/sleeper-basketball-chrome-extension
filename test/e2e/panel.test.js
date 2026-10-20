@@ -56,8 +56,14 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
 <div id="list"></div>
 <script>
   window.__sleeperToasts = 0;
+  window.__sleeperCards = 0;
   // React 16 delegates at the document, after any capture listener on the window.
-  document.addEventListener('click', (e) => { if (e.target.closest('.player-action-button')) window.__sleeperToasts++; });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.player-action-button')) window.__sleeperToasts++;
+    if (e.target.closest('.player-meta-container, .player-details')) window.__sleeperCards++;
+  });
+  // React 16 internals: a fiber chain whose props sit a few fibers up from the element.
+  const fiber = (props, depth) => (depth ? { memoizedProps: {}, return: fiber(props, depth - 1) } : { memoizedProps: props });
   for (const p of ${JSON.stringify(rows)}) {
     const row = document.createElement('div');
     row.className = 'row';
@@ -65,10 +71,18 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
     button.className = 'link-button player-action-button ' + (p.status === 'waiver' ? 'waiver' : 'add');
     button.dataset.player = p.id;
     button.innerHTML = '<span class="button-text">' + (p.status === 'waiver' ? 'W' : 'ADD') + '</span>';
-    // Shaped like React 16 internals: the action component's props sit two fibers up.
-    button.__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: {}, return: {
-      memoizedProps: { playerId: p.id, waiverStatus: { status: p.status, clearTime: 0 } } } } };
-    row.append(button, p.name);
+    // The action component's props sit two fibers up; the row's (with the player) three.
+    button.__reactInternalInstance$test = fiber({ playerId: p.id, waiverStatus: { status: p.status, clearTime: 0 } }, 2);
+    const meta = document.createElement('div');
+    meta.className = p.trend ? 'player-details' : 'player-meta-container';
+    meta.textContent = p.name;
+    meta.__reactInternalInstance$test = fiber({ player: { player_id: p.id } }, 3);
+    if (p.trend) {
+      row.className = 'trending-list-item';
+      row.append(meta);
+    } else {
+      row.append(button, meta);
+    }
     document.getElementById('list').append(row);
   }
 </script>`;
@@ -196,7 +210,9 @@ async function answerGraphql(route) {
     roster.taxi = JSON.parse(query.match(/taxi: (\[[^\]]*\])/)[1]);
     return json({ data: { roster_update_taxi: roster } });
   }
+  if (/query league_transactions_by_player\b/.test(query)) return json({ data: { league_transactions_by_player: [] } });
   const round = Number(query.match(/round: (\d+)/)?.[1]);
+  if (!round) return json({ errors: [{ message: `unmocked: ${query.slice(0, 60)}` }] });
   await seedLegs(round);
   if (/query matchup_legs\b/.test(query)) return json({ data: { matchup_legs: sleeper.legs[round] } });
   if (/mutation update_matchup_leg\b/.test(query)) {
@@ -233,6 +249,11 @@ before(async () => {
     const players = await res.json();
     for (const id of sleeper.injured) players[id].injury_status = 'Out';
     return route.fulfill({ response: res, json: players });
+  });
+  // Player card game logs arrive late, as on a slow connection, so tests see the loading state.
+  await context.route(/api\.sleeper\.app\/(stats|projections)\/nba\/player\//, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return route.fallback();
   });
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
     if (!sleeper.midWeek) return route.continue();
@@ -740,6 +761,26 @@ test('player card: clicking a player opens bio, game logs, career, news and dept
   const playerName = await name.textContent();
   await name.click();
   await page.locator(dialog('.pc')).waitFor();
+  // Loading must not move what's on screen. The card re-renders from fresh HTML, which the
+  // layout-shift API can't see, so track where the Career heading sits whenever it's visible.
+  await page.evaluate(() => {
+    // Moves where the heading was on screen before or after: [from, to] in px from the top of the column.
+    window.__careerMoves = [];
+    let last = null;
+    const tick = () => {
+      const root = document.querySelector('#sleeper-nba-dialog')?.shadowRoot;
+      const main = root?.querySelector('.pc-main');
+      const head = [...(root?.querySelectorAll('.pc-main h2') || [])].find((h) => h.textContent === 'Career');
+      if (main && head) {
+        const top = Math.round(head.getBoundingClientRect().top - main.getBoundingClientRect().top);
+        const visible = (y) => y < main.clientHeight;
+        if (last != null && top !== last && (visible(last) || visible(top))) window.__careerMoves.push([last, top]);
+        last = top;
+      }
+      if (window.__careerMoves) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   assert.equal(await page.locator(dialog('h2.pc-name')).textContent(), playerName);
   await page.locator(dialog('.pc-item-value')).first().filter({ hasText: /^\d+$/ }).waitFor({ timeout: 15000 });
   const bio = await page.locator(dialog('.pc-bio')).textContent();
@@ -755,6 +796,8 @@ test('player card: clicking a player opens bio, game logs, career, news and dept
   await page.locator(dialog('.pc-seasons button.on')).filter({ hasText: await tabs.nth(1).textContent() }).waitFor();
   await page.locator(dialog('.pc-table.log td[style*="background"]')).first().waitFor({ timeout: 15000 });
   assert.ok(await page.locator(dialog('.pc-table.career tbody tr td.fpts')).count() >= 1, 'career has at least one season');
+  const moves = await page.evaluate(() => { const m = window.__careerMoves; window.__careerMoves = null; return m; });
+  assert.deepEqual(moves, [], 'nothing on screen moves while game logs load');
 
   await page.locator(dialog('.pc-news h3')).first().waitFor({ timeout: 15000 });
   await page.locator(dialog('.pc-depth-row li.me')).waitFor({ timeout: 15000 });
@@ -766,4 +809,20 @@ test('player card: clicking a player opens bio, game logs, career, news and dept
 
   await page.keyboard.press('Escape');
   await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
+});
+
+test('player card: opens from the Players and Trend tabs instead of Sleeper\'s card', async () => {
+  documentBody = LOGGED_OUT;
+  const [first, second] = await freeAgents(2);
+  documentBody = playersTab([{ ...first, status: 'waiver' }, { ...second, status: 'free_agent', trend: true }]);
+  await page.goto(PLAYERS_URL);
+  await page.waitForFunction((id) => document.documentElement.dataset.snpNbaLeague === id, LEAGUE, { timeout: 30000 });
+  for (const p of [first, second]) {
+    await page.locator('.player-meta-container, .player-details').filter({ hasText: p.name }).click();
+    await page.locator(dialog('h2.pc-name')).filter({ hasText: p.name }).waitFor({ timeout: 30000 });
+    await page.keyboard.press('Escape');
+    await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
+  }
+  assert.equal(await page.evaluate(() => window.__sleeperCards), 0, "Sleeper's own card never opens");
+  documentBody = LOGGED_OUT;
 });

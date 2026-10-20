@@ -19,7 +19,7 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 - `src/model.js`: pure rules (schedule, Lock-In, lineup/taxi/IR moves, waivers, win probability). Unit tested.
 - `src/ui.js`, `src/view.js`, `src/matchup.js`, `src/waivers.js`, `src/card.js` (player card): pure state -> HTML render functions.
 - `src/content.js`: one session per league (survives tab switches), data loading, saves, events. Renders into a shadow root that replaces Sleeper's "not yet available" placeholder; dialogs render in a separate page-level host.
-- `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and hands clicks to the extension via a `snp:player-action` DOM event, only for leagues the extension marked NBA (`html[data-snp-nba-league]`).
+- `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and Players/Trend player rows, and hands clicks to the extension via `snp:player-action` / `snp:player-card` DOM events, only for leagues the extension marked NBA (`html[data-snp-nba-league]`).
 - `src/panel.css`: all styles, inlined into each shadow root.
 - `test/unit` (node:test, `TZ=America/New_York`), `test/e2e/panel.test.js` (stand-in Sleeper pages, live public API, mocked authenticated GraphQL). Each e2e run also writes `test-results/e2e.tap`; read it when a run fails intermittently.
 

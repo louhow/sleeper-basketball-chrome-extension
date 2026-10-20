@@ -1711,3 +1711,11 @@ ul.pc-history {
   color: #fff;
   font-weight: 900;
 }
+
+.pc-table tr.skeleton td {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pc-table.stale tbody {
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}

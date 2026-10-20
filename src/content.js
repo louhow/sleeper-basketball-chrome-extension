@@ -92,6 +92,7 @@
       modal: null,
     };
     let destroyed = false;
+    let pendingCard = null; // player card asked for before the league finished loading
     let disabled = false;
     let frame = 0;
     const api = createApi(schedule);
@@ -246,6 +247,8 @@
       state.ready = true;
       schedule();
       loadClaims();
+      if (pendingCard) openCard(pendingCard);
+      pendingCard = null;
     }
 
     // The logged-in owner's pending waiver claims, as Sleeper's waiver list loads them.
@@ -434,7 +437,11 @@
 
     // Player card: each part loads on its own and renders as it arrives.
     function openCard(playerId) {
-      if (!state.ready) return;
+      if (!state.ready) {
+        // Clicked from the Players or Trend tab before the league loaded: open once it has.
+        pendingCard = playerId;
+        return;
+      }
       state.modal = { kind: 'player', playerId, season: null };
       state.notice = null;
       schedule();
@@ -444,6 +451,7 @@
       const current = Number(state.league.season);
       const back = Math.min(Math.max(Number(player.years_exp) || 0, 0), CAREER_SEASONS - 1);
       const years = Array.from({ length: back + 1 }, (_, i) => current - i);
+      c.careerYears = years.length;
       const id = encodeURIComponent(playerId);
       const part = (promise, apply, fallback) => promise
         .then(apply)
@@ -770,6 +778,10 @@
       if (cancel) return cancelClaim(cancel.dataset.claimCancel);
       const season = e.target.closest('[data-card-season]');
       if (season && state.modal?.kind === 'player') {
+        const c = state.cards[state.modal.playerId];
+        const shown = state.modal.season ?? c?.seasons?.[0] ?? Number(state.league.season);
+        // Keep showing the season on screen until the new one loads.
+        if (c?.logs[shown]) state.modal.prevSeason = shown;
         state.modal.season = Number(season.dataset.cardSeason);
         loadCardLog(state.modal.playerId, state.modal.season);
         return schedule();
@@ -795,7 +807,15 @@
         console.error('[sleeper-nba-panel] bad player action', err);
       }
     }
+    function onPlayerCard(e) {
+      try {
+        openCard(JSON.parse(e.detail).playerId);
+      } catch (err) {
+        console.error('[sleeper-nba-panel] bad player card event', err);
+      }
+    }
     document.addEventListener('snp:player-action', onPlayerAction);
+    document.addEventListener('snp:player-card', onPlayerCard);
 
     function onKey(e) {
       if (e.key === 'Escape' && state.modal) return closeModal();
@@ -825,6 +845,7 @@
       clearInterval(clock);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('snp:player-action', onPlayerAction);
+      document.removeEventListener('snp:player-card', onPlayerCard);
       if (document.documentElement.dataset.snpNbaLeague === leagueId) delete document.documentElement.dataset.snpNbaLeague;
       cancelAnimationFrame(frame);
       host.remove();

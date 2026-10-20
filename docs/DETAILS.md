@@ -37,7 +37,7 @@ Rank comes from `roster_standings`; before any games are played, it falls back t
 
 ### Player card
 
-Clicking a player's name or headshot on the Team or Matchup tab opens a card laid out like Sleeper's NFL player card:
+Clicking a player's name or headshot on the Team or Matchup tab, or a player on the Players or Trend tab (instead of Sleeper's own NBA card), opens a card laid out like Sleeper's NFL player card:
 
 - Hero in team colors: owner, age, height, weight, experience, college, and rankings (position and overall rank from the latest season with stats, plus rostered and started %).
 - Game logs per season (tabs): projected and actual fantasy points with the league's scoring, minutes, box score and shooting, shaded like Sleeper's tables. The current season lists upcoming games with projections.

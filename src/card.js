@@ -179,12 +179,17 @@
   }
 
   const loading = '<p class="pc-empty">Loading…</p>';
+  // Placeholder rows hold a table's height while it loads, so nothing below jumps.
+  const SKELETON_ROWS = 15;
+  const skeleton = (rows, cols) => Array.from({ length: rows }, () => `<tr class="skeleton">${'<td>&nbsp;</td>'.repeat(cols)}</tr>`).join('');
 
   function gameLogSection(s, c, m) {
     const seasons = c.seasons || [];
     const season = m.season ?? seasons[0] ?? Number(s.league?.season);
     const tabs = seasons.map((y) => `<button class="${y === season ? 'on' : ''}" data-card-season="${y}">${seasonLabel(y)}</button>`).join('');
-    const log = c.logs?.[season];
+    // Switching seasons keeps the previous season on screen, dimmed, until the new one arrives.
+    const stale = !c.logs?.[season] && m.prevSeason != null && c.logs?.[m.prevSeason];
+    const log = c.logs?.[season] || stale;
     const rows = log ? gameLog(log, s.league?.scoring_settings || {}) : null;
     const played = (rows || []).filter((r) => r.played);
     const cols = [
@@ -197,7 +202,7 @@
       ft: scaler(played.map((r) => ({ v: pct(r.ftm, r.fta) })), 'v'),
     };
     const md = (date) => (date ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : '');
-    const body = !rows ? `<tr><td colspan="15">${loading}</td></tr>`
+    const body = !rows ? skeleton(SKELETON_ROWS, 15)
       : !rows.length ? '<tr><td colspan="15"><p class="pc-empty">No games this season.</p></td></tr>'
       : rows.map((r) => {
         const cell = (k, digits = 0) => `<td${r.played ? heat(scale[k](r[k])) : ''}>${r.played ? num(r[k], digits) : '-'}</td>`;
@@ -212,7 +217,7 @@
       }).join('');
     return `<section class="pc-section">
       <div class="pc-section-head"><h2>Game Logs</h2>${tabs ? `<div class="pc-seasons" role="tablist">${tabs}</div>` : ''}</div>
-      <table class="pc-table log">
+      <table class="pc-table log${stale ? ' stale' : ''}" aria-busy="${!c.logs?.[season]}">
         <thead>
           <tr class="group"><th colspan="4"></th><th colspan="2">Fantasy</th><th colspan="6">Stats</th><th colspan="3">Shooting</th></tr>
           <tr><th>Wk</th><th>Date</th><th>Opp</th><th>Proj</th><th class="fpts">Fpts</th><th>Min</th>
@@ -231,8 +236,8 @@
     const cell = (r, k, fmt) => `<td${heat(scale[k](r[k]))}>${r[k] == null ? '-' : fmt(r[k])}</td>`;
     const one = (v) => v.toFixed(1);
     const three = (v) => v.toFixed(3).replace(/^0/, '');
-    const body = !rows ? `<tr><td colspan="16">${loading}</td></tr>`
-      : !rows.length ? '<tr><td colspan="16"><p class="pc-empty">No career stats yet.</p></td></tr>'
+    const body = !rows ? skeleton(c.careerYears || 1, 15)
+      : !rows.length ? '<tr><td colspan="15"><p class="pc-empty">No career stats yet.</p></td></tr>'
       : rows.map((r) => `<tr>
           <td class="dim">${seasonLabel(r.season)}</td><td class="opp">${esc(r.team || '-')}</td>${cell(r, 'gp', String)}
           <td class="fpts">${one(r.fpts)}</td>${cell(r, 'rank', String)}
