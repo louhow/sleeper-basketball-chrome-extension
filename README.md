@@ -9,7 +9,8 @@ It uses the same endpoints as Sleeper's web app, which can change without notice
 ## Privacy
 
 Everything runs locally in your browser.
-There is no server: the extension only talks to Sleeper (`api.sleeper.app`, `sleeper.com`, `sleepercdn.com`), the same way Sleeper's own site does.
+There is no server: the extension only talks to Sleeper, the same way Sleeper's own site does.
+It calls `api.sleeper.app` and `sleeper.com` for league data, and loads player headshots, team logos and avatars from Sleeper's image CDN (`sleepercdn.com`).
 No data is sent to the author or any third party, and we never see your data or your Sleeper login.
 The only things it stores are a cached copy of Sleeper's public NBA player list and which team you picked per league, both in your browser's extension storage.
 
