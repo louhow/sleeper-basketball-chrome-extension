@@ -1,2 +1,16 @@
 node_modules/
 test-results/
+playwright-report/
+
+# Packed extension builds and signing keys
+*.crx
+*.pem
+*.zip
+
+# Local env and OS/editor files
+.env
+.env.*
+.DS_Store
+*.log
+.vscode/
+.idea/

@@ -1,7 +1,10 @@
-# Sleeper NBA Team
+# Sleeper Basketball Chrome Extension
 
 Chrome extension (MV3) that fills Sleeper's empty NBA Team and Matchup tabs (`sleeper.com/leagues/<id>/team` and `/matchup`) with the layouts from the mobile app.
 It also logs every API call it makes, with status, timing, size and a JSON preview, to support probing the API.
+
+Unofficial and not affiliated with Sleeper.
+It uses the same endpoints as Sleeper's web app, which can change without notice.
 
 ## What it shows
 
