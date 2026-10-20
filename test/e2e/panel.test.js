@@ -290,7 +290,7 @@ test('shows starters with a full week of days and real projections', async () =>
   assert.ok(times.some((t) => /^\d{1,2}:\d\d(am|pm)$/.test(t)), 'game times come from the scores query');
   assert.match(await page.locator(panel('.week-label')).textContent(), /Week \d+\s*[A-Z]{3} \d+-/);
   assert.match(await page.locator(panel('.team-card')).textContent(), /proj \d+\.\d\d/);
-  assert.match(await page.locator(panel('.line2')).first().textContent(), /\d+% Rostered\s*\|\s*\d+% Start/);
+  assert.match(await page.locator(panel('.line2')).first().textContent(), /\d+% Start\s*\|\s*\d+% Rostered/);
   await page.screenshot({ path: `${OUT}team.png` });
   await page.locator(panel('.body')).evaluate((b) => { b.scrollTop = b.scrollHeight; });
   await page.screenshot({ path: `${OUT}team-bottom.png` });

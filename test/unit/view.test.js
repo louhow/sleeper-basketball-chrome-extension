@@ -63,8 +63,8 @@ test('starters use league slots, with combo slots split by color', () => {
   const html = render(state(), []);
   assert.match(html, /class="slot split pg sg" style="--a:var\(--pg\);--b:var\(--sg\)">G</);
   const out = text(html);
-  assert.match(out, /PG Luka Doncic PG - LAL 100% Rostered \| 97% Start .* 12\.50 proj 39\.83/);
-  assert.match(out, /G Jeremiah Fears PG SG - NOP Questionable 95% Rostered \| 23% Start/);
+  assert.match(out, /PG Luka Doncic PG - LAL 97% Start \| 100% Rostered .* 12\.50 proj 39\.83/);
+  assert.match(out, /G Jeremiah Fears PG SG - NOP Questionable 23% Start \| 95% Rostered/);
   assert.match(out, /UTIL Empty/);
 });
 
