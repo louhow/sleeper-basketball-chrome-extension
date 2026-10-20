@@ -1719,3 +1719,16 @@ ul.pc-history {
   opacity: 0.45;
   transition: opacity 0.15s ease;
 }
+
+.claim-actions.confirm span {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+}
+button.danger.solid {
+  background: var(--danger);
+  color: #fff;
+}
+button.danger.solid:hover:not(:disabled) {
+  background: #ff7484;
+}

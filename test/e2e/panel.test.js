@@ -670,7 +670,15 @@ test('waivers: the Team tab lists pending claims to rebid or cancel', async () =
   assert.deepEqual(update.variables, { k_settings: ['waiver_bid'], v_settings: [9] });
   assert.equal(await page.locator(dialog(`[data-claim-bid="${claim.transaction_id}"]`)).inputValue(), '9');
 
+  const before = sleeper.mutations.length;
   await page.locator(dialog(`[data-claim-cancel="${claim.transaction_id}"]`)).click();
+  await page.locator(dialog('[data-claim-cancel-keep]')).click();
+  await page.locator(dialog(`[data-claim-cancel="${claim.transaction_id}"]`)).waitFor();
+  assert.equal(sleeper.mutations.length, before, 'Keep leaves the claim alone');
+  await page.locator(dialog(`[data-claim-cancel="${claim.transaction_id}"]`)).click();
+  assert.match(await dialogText('.claim-actions.confirm'), /Cancel this claim\?/);
+  await page.screenshot({ path: `${OUT}waiver-cancel-confirm.png` });
+  await page.locator(dialog(`[data-claim-cancel-confirm="${claim.transaction_id}"]`)).click();
   await page.locator(dialog('.dialog-body')).filter({ hasText: 'No pending claims' }).waitFor();
   assert.match(sleeper.mutations.at(-1).query, new RegExp(`cancel_waiver_claim\\(league_id: "${LEAGUE}", leg: 1, transaction_id: "${claim.transaction_id}"\\)`));
   await page.keyboard.press('Escape');

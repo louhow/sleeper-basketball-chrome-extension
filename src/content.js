@@ -609,6 +609,7 @@
     function cancelClaim(id) {
       const claim = claimById(id);
       if (!claim) return;
+      state.modal.confirmCancel = null;
       const name = state.players[Object.keys(claim.adds || {})[0]]?.name || 'claim';
       return modalSave(async () => {
         await api.graphql('cancel_waiver_claim', `mutation cancel_waiver_claim {
@@ -774,8 +775,19 @@
         const input = layerRoot.querySelector(`[data-claim-bid="${CSS.escape(id)}"]`);
         return updateClaimBid(id, input?.value ?? '');
       }
+      // Canceling a claim asks first; only "Yes, cancel" removes it.
       const cancel = e.target.closest('[data-claim-cancel]');
-      if (cancel) return cancelClaim(cancel.dataset.claimCancel);
+      if (cancel && state.modal?.kind === 'claims' && !state.modal.saving) {
+        state.modal.confirmCancel = cancel.dataset.claimCancel;
+        state.modal.errors = [];
+        return schedule();
+      }
+      if (e.target.closest('[data-claim-cancel-keep]') && state.modal) {
+        state.modal.confirmCancel = null;
+        return schedule();
+      }
+      const confirmed = e.target.closest('[data-claim-cancel-confirm]');
+      if (confirmed) return cancelClaim(confirmed.dataset.claimCancelConfirm);
       const season = e.target.closest('[data-card-season]');
       if (season && state.modal?.kind === 'player') {
         const c = state.cards[state.modal.playerId];

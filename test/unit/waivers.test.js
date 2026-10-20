@@ -128,6 +128,10 @@ test('claims dialog lists pending claims by bid with edit and cancel', () => {
   assert.match(out, /1 \+ Delta .* 2 \+ New Guy .* − Echo/);
   assert.match(html, /data-claim-bid="t2" value="12"/);
   assert.match(html, /data-claim-cancel="t1"/);
+  const confirming = waivers.render(state({ kind: 'claims', errors: [], confirmCancel: 't1' }, { claims }));
+  assert.match(text(confirming), /Cancel this claim\? Yes, cancel Keep/, 'asks before canceling');
+  assert.match(confirming, /data-claim-cancel-confirm="t1"/);
+  assert.match(confirming, /data-claim-cancel="t2"/, 'other claims keep their buttons');
   assert.match(text(waivers.render(state({ kind: 'claims', errors: [] }, { claims: [] }))), /No pending claims/);
 });
 

@@ -135,11 +135,15 @@
           ${Object.keys(c.adds || {}).map((id) => player(id, '+')).join('')}
           ${Object.keys(c.drops || {}).map((id) => player(id, '−')).join('')}
         </div>
-        <div class="claim-actions">
+        ${m.confirmCancel === c.transaction_id ? `<div class="claim-actions confirm" role="alert">
+          <span>Cancel this claim?</span>
+          <button class="danger solid" data-claim-cancel-confirm="${esc(c.transaction_id)}" ${m.saving ? 'disabled' : ''}>Yes, cancel</button>
+          <button data-claim-cancel-keep ${m.saving ? 'disabled' : ''}>Keep</button>
+        </div>` : `<div class="claim-actions">
           ${faab ? `<span class="bid-input">$ <input type="number" inputmode="numeric" min="0" step="1" aria-label="Bid" data-claim-bid="${esc(c.transaction_id)}" value="${esc(c.settings?.waiver_bid ?? 0)}"></span>
           <button data-claim-save="${esc(c.transaction_id)}" ${m.saving ? 'disabled' : ''}>Save</button>` : ''}
           <button class="danger" data-claim-cancel="${esc(c.transaction_id)}" ${m.saving ? 'disabled' : ''}>Cancel</button>
-        </div>
+        </div>`}
       </li>`).join('');
     return `${head('Waiver Claims', description)}
       <div class="dialog-body">
