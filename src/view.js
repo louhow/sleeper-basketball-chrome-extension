@@ -153,9 +153,9 @@
     const pct = (n) => (n == null ? '–' : `${Math.ceil(n)}%`);
     return `<article class="card${cls}">
       ${slotBadge(slot, button)}
-      <img class="headshot" src="${headshot(id)}" alt="">
+      <img class="headshot" src="${headshot(id)}" alt="" data-player="${esc(id)}">
       <div class="info">
-        <div class="line1"><span class="name">${esc(p.name)}</span>${positions(p)}<span class="team">- ${esc(p.team || 'FA')}</span>${injuryTag(p)}</div>
+        <div class="line1"><button class="name" data-player="${esc(id)}">${esc(p.name)}</button>${positions(p)}<span class="team">- ${esc(p.team || 'FA')}</span>${injuryTag(p)}</div>
         <div class="line2" title="Started and rostered in leagues like this one"><b>${pct(research?.started)}</b> Start<span class="bar">|</span><b>${pct(research?.owned)}</b> Rostered</div>
       </div>
       <div class="days">${days.map((d) => dayCell(d, s.today)).join('')}</div>

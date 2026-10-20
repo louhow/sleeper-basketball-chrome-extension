@@ -1320,3 +1320,394 @@ ol.claims {
 .claim-actions .bid-input input {
   width: 56px;
 }
+
+/* Player names open the player card. */
+button.name,
+.mp-id .name button {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+button.name:hover,
+.mp-id .name button:hover {
+  background: none !important;
+  text-decoration: underline;
+}
+.line1 button.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+img.headshot[data-player] {
+  cursor: pointer;
+}
+
+/* Player card, after Sleeper's NFL player card. */
+.pc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  height: min(680px, calc(100vh - 48px));
+  font-family: Muli, Mulish, Lato, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.pc-top {
+  display: flex;
+  flex: none;
+}
+.pc-tab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 220px;
+  padding: 10px 12px 8px 16px;
+  border-radius: 10px 10px 0 0;
+  background: color-mix(in srgb, var(--team) 35%, #10151d);
+}
+.pc-tab b {
+  display: block;
+  font-size: 14px;
+  font-weight: 900;
+}
+.pc-tab span {
+  display: block;
+  font-size: 10px;
+  opacity: 0.8;
+}
+.pc-tab .close {
+  padding: 2px 4px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+.pc-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 10px 10px 10px;
+  background: rgb(37, 45, 61);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.pc-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  flex: none;
+  height: 217px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--team) 35%, #10151d);
+}
+.pc-photo {
+  position: relative;
+  overflow: hidden;
+}
+.pc-logo {
+  position: absolute;
+  top: 26px;
+  left: 70px;
+  width: 210px;
+  height: 210px;
+  object-fit: contain;
+  opacity: 0.35;
+}
+.pc-shot {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 270px;
+  height: auto;
+}
+.pc-number {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  width: 270px;
+  height: 40px;
+  background: rgba(10, 14, 20, 0.72);
+}
+.pc-number b {
+  padding-left: 12px;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+.pc-pos {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 100%;
+  background: var(--muted);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+.pc-pos.pg { background: var(--pg); }
+.pc-pos.sg { background: var(--sg); }
+.pc-pos.sf { background: #3fb98a; }
+.pc-pos.pf { background: #7d6fe0; }
+.pc-pos.c { background: #a660e0; }
+.pc-info {
+  padding: 14px 20px 0 8px;
+  min-width: 0;
+}
+.pc-owner {
+  color: #7ab8ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pc-owner .arrow {
+  font-size: 9px;
+}
+h2.pc-name {
+  margin: 0 0 8px;
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pc-bio {
+  display: flex;
+  align-items: flex-end;
+}
+.pc-item {
+  padding: 0 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+.pc-item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.pc-item-label,
+.pc-label {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.pc-item-value {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.pc-item-value small {
+  margin-left: 3px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+.pc-label {
+  margin-top: 12px;
+}
+.pc-ranks {
+  display: flex;
+  gap: 22px;
+  margin-top: 2px;
+}
+.pc-ranks span {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.pc-ranks b {
+  color: #fff;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+.pc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  flex: 1;
+  min-height: 0;
+}
+.pc-main,
+.pc-side {
+  min-height: 0;
+  overflow: auto;
+}
+.pc-side {
+  padding: 0 16px 16px;
+}
+.pc-section {
+  padding-bottom: 8px;
+}
+.pc-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 8px;
+}
+.pc-side .pc-section-head {
+  padding: 14px 0 8px;
+}
+.pc-section-head h2 {
+  margin: 0;
+  color: rgb(163, 187, 211);
+  font: 700 14px/1.2 Lato, -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.04px;
+  text-transform: uppercase;
+}
+.pc-seasons {
+  display: flex;
+  padding: 3px;
+  border-radius: 16px;
+  background: rgba(10, 14, 20, 0.35);
+}
+.pc-seasons button {
+  padding: 4px 12px;
+  border-radius: 13px;
+  background: none;
+  font-size: 12px;
+  font-weight: 800;
+}
+.pc-seasons button.on,
+.pc-seasons button.on:hover {
+  background: var(--accent);
+  color: #0d1421;
+}
+.pc-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.pc-table th,
+.pc-table td {
+  padding: 0 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+.pc-table thead tr.group th {
+  padding-bottom: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.pc-table thead tr:not(.group) th {
+  height: 24px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.pc-table td {
+  height: 27px;
+  font-size: 12px;
+}
+.pc-table tbody tr:nth-child(odd) td {
+  box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.025);
+}
+.pc-table .fpts {
+  background: rgba(255, 255, 255, 0.07);
+  font-weight: 800;
+}
+.pc-table td.dim {
+  color: var(--muted);
+}
+.pc-table td.opp {
+  font-weight: 800;
+}
+.pc-empty {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+ul.pc-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pc-tx {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+.pc-tx-label {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.pc-tx.added .pc-tx-label { color: var(--accent); }
+.pc-tx.dropped .pc-tx-label { color: var(--danger); }
+.pc-tx.drafted .pc-tx-label { color: #8fb4ff; }
+.pc-tx.traded .pc-tx-label { color: var(--warn); }
+.pc-tx-date {
+  color: var(--muted);
+  font-size: 10px;
+}
+.pc-news {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border-radius: 4px;
+  background: rgb(44, 61, 85);
+}
+.pc-news h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+.pc-news-meta {
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+}
+.pc-news p {
+  margin: 0 0 8px;
+  font: 12.5px/1.45 Lato, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.pc-depth-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  margin-bottom: 8px;
+}
+.pc-depth-row .pos {
+  padding-top: 2px;
+  font-size: 11px;
+}
+.pc-depth-row ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pc-depth-row li {
+  padding: 2px 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+.pc-depth-row li.me {
+  color: #fff;
+  font-weight: 900;
+}

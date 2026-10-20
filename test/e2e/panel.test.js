@@ -731,3 +731,39 @@ test('IR: Out players move onto IR from the bench or the lineup', async () => {
   sleeper.injured = new Set();
   documentBody = LOGGED_OUT;
 });
+
+test('player card: clicking a player opens bio, game logs, career, news and depth chart', async () => {
+  documentBody = LOGGED_OUT;
+  await page.goto(TEAM_URL);
+  const name = page.locator(panel('.card button.name')).first();
+  await name.waitFor({ timeout: 30000 });
+  const playerName = await name.textContent();
+  await name.click();
+  await page.locator(dialog('.pc')).waitFor();
+  assert.equal(await page.locator(dialog('h2.pc-name')).textContent(), playerName);
+  await page.locator(dialog('.pc-item-value')).first().filter({ hasText: /^\d+$/ }).waitFor({ timeout: 15000 });
+  const bio = await page.locator(dialog('.pc-bio')).textContent();
+  assert.match(bio, /Age\s*\d+\s*Height\s*\d'\d+"\s*Weight\s*\d+\s*lbs\s*Exp\s*\d+\s*College/);
+  assert.match(await page.locator(dialog('.pc-number')).textContent(), /[A-Z0-9 ]+( #\d+)?/);
+
+  // This season: upcoming games with projections; last season: played games, heat-shaded.
+  await page.locator(dialog('.pc-table.log tbody tr td.opp')).first().waitFor({ timeout: 15000 });
+  assert.match(await page.locator(dialog('.pc-table.log tbody tr')).first().textContent(), /\d+\.\d\d/);
+  const tabs = page.locator(dialog('.pc-seasons button'));
+  await page.waitForFunction(() => document.querySelector('#sleeper-nba-dialog').shadowRoot.querySelectorAll('.pc-seasons button').length > 1, null, { timeout: 15000 });
+  await tabs.nth(1).click();
+  await page.locator(dialog('.pc-seasons button.on')).filter({ hasText: await tabs.nth(1).textContent() }).waitFor();
+  await page.locator(dialog('.pc-table.log td[style*="background"]')).first().waitFor({ timeout: 15000 });
+  assert.ok(await page.locator(dialog('.pc-table.career tbody tr td.fpts')).count() >= 1, 'career has at least one season');
+
+  await page.locator(dialog('.pc-news h3')).first().waitFor({ timeout: 15000 });
+  await page.locator(dialog('.pc-depth-row li.me')).waitFor({ timeout: 15000 });
+  assert.equal(await page.locator(dialog('.pc-depth-row li.me')).textContent(), playerName);
+  assert.match(await page.locator(dialog('.pc-main')).textContent(), /Transaction History\s*Log in to Sleeper/);
+  await page.screenshot({ path: `${OUT}player-card.png` });
+  await page.locator(dialog('.pc-main')).evaluate((m) => { m.scrollTop = m.scrollHeight; });
+  await page.screenshot({ path: `${OUT}player-card-bottom.png` });
+
+  await page.keyboard.press('Escape');
+  await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
+});

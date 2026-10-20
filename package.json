@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "TZ=America/New_York node --test 'test/unit/*.test.js'",
-    "test:e2e": "node --test 'test/e2e/*.test.js'"
+    "test:e2e": "mkdir -p test-results && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=test-results/e2e.tap 'test/e2e/*.test.js'"
   },
   "devDependencies": {
     "playwright": "^1.64.1"

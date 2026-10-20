@@ -127,9 +127,9 @@
       </div>
       <div class="mp-pts"><b>${starter && st.counted ? f2(st.points) : '–'}</b>${cur ? `<span>${curDone ? 'pts' : 'proj'} ${f2(curValue)}</span>` : ''}</div>`;
     return `<div class="mp ${cls}${st.locked ? ' is-locked' : ''}${confirming ? ' confirming' : ''}">
-      <img class="headshot" src="${headshot(id)}" alt="">
+      <img class="headshot" src="${headshot(id)}" alt="" data-player="${esc(id)}">
       <div class="mp-id">
-        <div class="name">${esc(shortName(p))}${injuryTag(p)}</div>
+        <div class="name"><button data-player="${esc(id)}">${esc(shortName(p))}</button>${injuryTag(p)}</div>
         <div class="sub">${cls === 'theirs' ? `${games}${who}` : `${who}${games}`}</div>
       </div>
       ${confirming ? lockConfirm(s, st, ref) : `${result}<div class="mp-lk">${starter ? lockControl(s, sd, st, ref) : ''}</div>`}

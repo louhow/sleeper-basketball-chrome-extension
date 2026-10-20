@@ -4,7 +4,7 @@
 // On every page of an NBA league it also answers Sleeper's waiver and add
 // buttons (see page-hook.js) with a bid dialog.
 (() => {
-  const { createApi, view, model, scoring, ui, waivers } = globalThis.SNP;
+  const { createApi, view, model, scoring, ui, waivers, card } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
   const PANEL_PAGES = new Set(['team', 'matchup']);
   const PLAYERS_PATH = '/v1/players/nba';
@@ -15,6 +15,9 @@
   const FLOAT_AFTER_MS = 4000;
   const NOTICE_MS = 3000;
   const CLOCK_MS = 60e3;
+  // Career seasons fetched for the player card (one request each).
+  const CAREER_SEASONS = 10;
+  const CARD_SEASON_TABS = 6;
   const TRANSACTION_FIELDS = 'adds drops leg roster_ids settings status transaction_id type created creator';
 
   // The stylesheet is inlined into each shadow root, so nothing ever paints unstyled.
@@ -84,7 +87,9 @@
       lockConfirm: null, // player id whose Lock-In is awaiting confirmation
       ready: false, // first league + week load finished; the panel stays blank until then
       claims: null, // the logged-in owner's pending waiver claims
-      modal: null, // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving }
+      cards: {}, // player card data by player id, kept for the session
+      // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving } | { kind: 'player', playerId, season }
+      modal: null,
     };
     let destroyed = false;
     let disabled = false;
@@ -145,11 +150,15 @@
       const showNotice = Boolean(state.notice) && (!state.onPanel || state.modal);
       if (!state.modal && !showNotice) return layer.remove();
       if (!layer.isConnected) document.documentElement.appendChild(layer);
-      const scrollTop = layerRoot.querySelector('.dialog-body')?.scrollTop ?? 0;
+      // Scrolled areas keep their place across re-renders.
+      const scrolls = [...layerRoot.querySelectorAll('.dialog-body, [data-scroll]')].map((el) => [el.dataset.scroll || 'dialog', el.scrollTop]);
       const focused = layerShadow.activeElement?.matches?.('[data-bid]');
-      layerRoot.innerHTML = `<div class="page-layer">${waivers.render(state)}${showNotice ? ui.notice(state) : ''}</div>`;
-      const body = layerRoot.querySelector('.dialog-body');
-      if (body) body.scrollTop = scrollTop;
+      const dialog = state.modal?.kind === 'player' ? card.render(state) : waivers.render(state);
+      layerRoot.innerHTML = `<div class="page-layer">${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
+      for (const [key, top] of scrolls) {
+        const el = key === 'dialog' ? layerRoot.querySelector('.dialog-body') : layerRoot.querySelector(`[data-scroll="${key}"]`);
+        if (el) el.scrollTop = top;
+      }
       const input = layerRoot.querySelector('[data-bid]');
       if (input && (focused || state.modal.focus)) {
         input.focus();
@@ -423,6 +432,71 @@
       schedule();
     }
 
+    // Player card: each part loads on its own and renders as it arrives.
+    function openCard(playerId) {
+      if (!state.ready) return;
+      state.modal = { kind: 'player', playerId, season: null };
+      state.notice = null;
+      schedule();
+      if (state.cards[playerId]) return;
+      const c = (state.cards[playerId] = { logs: {} });
+      const player = state.players[playerId] || {};
+      const current = Number(state.league.season);
+      const back = Math.min(Math.max(Number(player.years_exp) || 0, 0), CAREER_SEASONS - 1);
+      const years = Array.from({ length: back + 1 }, (_, i) => current - i);
+      const id = encodeURIComponent(playerId);
+      const part = (promise, apply, fallback) => promise
+        .then(apply)
+        .catch((err) => {
+          console.warn('[sleeper-nba-panel] player card', err);
+          fallback?.();
+        })
+        .finally(schedule);
+
+      part(api.get(`/players/nba/${id}`), (bio) => { c.bio = bio; });
+      part(Promise.all(years.map((season) => api.get(`/stats/nba/player/${id}?season_type=regular&season=${season}`)
+        .then((row) => ({ season, team: row?.team, stats: row?.stats || null }))
+        .catch(() => ({ season, stats: null })))), (rows) => {
+        c.career = rows;
+        c.seasons = [current, ...rows.filter((r) => r.season !== current && r.stats?.gp).map((r) => r.season)].slice(0, CARD_SEASON_TABS);
+      }, () => { c.career = []; c.seasons = [current]; });
+      loadCardLog(playerId, current);
+      part(api.graphql('get_player_news', `query get_player_news {
+  get_player_news(sport: "nba", player_id: ${JSON.stringify(playerId)}, limit: 10) { metadata player_id published source source_key sport }
+}`), (data) => { c.news = data?.get_player_news ?? []; }, () => { c.news = []; });
+      if (player.team) {
+        part(api.get(`/players/nba/${encodeURIComponent(player.team)}/depth_chart`), (chart) => { c.depth = chart || {}; }, () => { c.depth = {}; });
+      }
+      if (api.loggedIn()) {
+        part(api.graphql('league_transactions_by_player', `query league_transactions_by_player {
+  league_transactions_by_player(league_id: ${JSON.stringify(leagueId)}, player_id: ${JSON.stringify(playerId)}) {
+    ${TRANSACTION_FIELDS} metadata draft_picks
+  }
+}`, { auth: true }), (data) => { c.history = data?.league_transactions_by_player ?? []; }, () => { c.historyError = true; });
+      } else {
+        c.historyError = true;
+      }
+    }
+
+    // One season of a player's game log: played games plus projections.
+    function loadCardLog(playerId, season) {
+      const c = state.cards[playerId];
+      if (!c || c.logs[season] || c.pendingLogs?.has(season)) return;
+      (c.pendingLogs ||= new Set()).add(season);
+      const query = `?season_type=regular&season=${Number(season)}&grouping=week`;
+      const id = encodeURIComponent(playerId);
+      Promise.all([api.get(`/stats/nba/player/${id}${query}`), api.get(`/projections/nba/player/${id}${query}`).catch(() => null)])
+        .then(([stats, proj]) => { c.logs[season] = { stats, proj }; })
+        .catch((err) => {
+          console.warn('[sleeper-nba-panel] game log', err);
+          c.logs[season] = { stats: {}, proj: {} };
+        })
+        .finally(() => {
+          c.pendingLogs.delete(season);
+          schedule();
+        });
+    }
+
     function openClaims() {
       state.modal = { kind: 'claims', errors: [], saving: false };
       state.notice = null;
@@ -633,6 +707,8 @@
       }
       const spot = e.target.closest('[data-spot]');
       if (spot) return pickSpot(spot.dataset.spot);
+      const player = e.target.closest('[data-player]');
+      if (player) return openCard(player.dataset.player);
       const lock = e.target.closest('[data-lock]');
       if (lock && !state.saving) {
         state.lockConfirm = lock.dataset.lock;
@@ -692,6 +768,12 @@
       }
       const cancel = e.target.closest('[data-claim-cancel]');
       if (cancel) return cancelClaim(cancel.dataset.claimCancel);
+      const season = e.target.closest('[data-card-season]');
+      if (season && state.modal?.kind === 'player') {
+        state.modal.season = Number(season.dataset.cardSeason);
+        loadCardLog(state.modal.playerId, state.modal.season);
+        return schedule();
+      }
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (action === 'close-modal') closeModal();
       if (action === 'submit-claim') submitClaim();

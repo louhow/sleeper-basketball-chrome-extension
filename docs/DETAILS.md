@@ -35,6 +35,15 @@ The projection follows Lock-In rules: an unlocked player scores their final game
 Win probability is Sleeper's own formula, ported from its web app: each side is a normal distribution centred on its projection, narrowing as the score approaches it.
 Rank comes from `roster_standings`; before any games are played, it falls back to the standings order (record, points, then waiver order), which is what Sleeper shows then.
 
+### Player card
+
+Clicking a player's name or headshot on the Team or Matchup tab opens a card laid out like Sleeper's NFL player card:
+
+- Hero in team colors: owner, age, height, weight, experience, college, and rankings (position and overall rank from the latest season with stats, plus rostered and started %).
+- Game logs per season (tabs): projected and actual fantasy points with the league's scoring, minutes, box score and shooting, shaded like Sleeper's tables. The current season lists upcoming games with projections.
+- Career: one row per season with fantasy points, position rank, per-game averages and shooting.
+- Transaction history in this league (logged in), latest news, and the team's depth chart.
+
 ### Waivers
 
 Sleeper's web Players tab lists NBA players with their waiver (W) or ADD buttons, but answers every click with "Player Actions not yet available on web for NBA fantasy".
@@ -81,6 +90,8 @@ It enables:
 | `GET /projections/nba/<season>/<week>` | Per-game projected stats, scored with the league's settings |
 | `GET /stats/nba/<season>/<week>` | Per-game actual stats |
 | `GET /players/nba/research/<type>/<season>/<week>?league_type=` | Rostered and start percentages |
+| `GET /players/nba/<id>`, `/stats/nba/player/<id>?season=&grouping=week`, `/projections/nba/player/<id>?...`, `/players/nba/<team>/depth_chart` | Player card: bio, game logs, career, depth chart |
+| `POST sleeper.com/graphql` `get_player_news`, `league_transactions_by_player` | Player card: latest news, transaction history |
 | `POST sleeper.com/graphql` `scores(...)` | Game times and home/away |
 | `POST sleeper.com/graphql` `roster_standings(...)` | Standings rank |
 | `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters`, `roster_update_taxi`, `roster_update_reserve` | Logged-in lineup data, swaps, Lock-In, taxi and IR (see above) |
