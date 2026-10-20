@@ -464,8 +464,8 @@ test('matchup: locks in a finished game for your starter', async () => {
   assert.match(query, new RegExp(`starters: ${JSON.stringify(leg.starters).replace(/[[\]]/g, '\\$&')}`), 'lineup unchanged');
   const card = page.locator(panel('.mp.mine.is-locked'));
   await card.first().waitFor();
-  assert.match(await card.first().textContent(), /LOCKED/);
-  const locked = (await card.first().locator('.mp-pts').textContent()).trim();
+  assert.equal(await card.first().locator('.lk.locked').count(), 1, 'shows the lock');
+  const locked = (await card.first().locator('.mp-pts b').textContent()).trim();
   assert.match(await page.locator(panel('.mu-team.mine .mu-pts')).textContent(), new RegExp(locked.replace('.', '\\.')), 'header counts the locked game');
   await page.screenshot({ path: `${OUT}lock-done.png` });
   sleeper.midWeek = false;

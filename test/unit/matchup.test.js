@@ -55,17 +55,16 @@ const state = (overrides = {}) => ({
 
 test('header pairs both teams with win %, record, rank and projection', () => {
   const out = text(matchup.render(state()));
-  assert.match(out, /@louhow COOKIE MONSTER – 37% WIN 0-0 \(#3\) 157\.23 VS @badonkeyds Cling Kong – 63% WIN 0-0 \(#7\) 181\.21/);
-  assert.match(out, /Yet to play \(1\) Yet to play \(1\)/);
+  assert.match(out, /@louhow COOKIE MONSTER – 37% WIN 0-0 \(#3\) Yet to play \(1\) 157\.23 VS @badonkeyds Cling Kong – 63% WIN 0-0 \(#7\) Yet to play \(1\) 181\.21/);
 });
 
 test('starter rows mirror the slot with the lockable game and logos', () => {
   const html = matchup.render(state());
   const out = text(html);
-  assert.match(out, /L\. Doncic PG • LAL – vs GSW Final · Wed pts 41\.50 🔓 LOCK-IN PG D\. Mitchell SG PG • CLE – @ PHI Thu 7:00pm proj 25\.75 NOT LOCKED/);
+  assert.match(out, /L\. Doncic PG • LAL vs GSW Final · Wed – pts 41\.50 LOCK PG D\. Mitchell SG PG • CLE @ PHI Thu 7:00pm – proj 25\.75 Bench/);
   assert.match(html, /<button class="lk open" data-lock="10:luka"/);
   assert.match(html, /class="chip done current"[^>]*><img src="https:\/\/sleepercdn\.com\/images\/team_logos\/nba\/gsw\.webp"/);
-  assert.match(out, /Bench B\. Guy SF • BOS – No games this week – BN Empty/);
+  assert.match(out, /Bench B\. Guy SF • BOS No games – BN Empty/);
   assert.match(out, /Injured Reserve Empty IR H\. Guy Out/);
 });
 
@@ -74,7 +73,7 @@ test('lock-in asks to confirm, and shows locked games as final', () => {
   assert.match(confirming, /data-lock-confirm="10:luka"[^>]*>Lock 41\.50</);
   assert.match(confirming, /data-lock-cancel/);
   const locked = text(matchup.render(state({ weeks: { 1: week(legs('g1')) } })));
-  assert.match(locked, /L\. Doncic PG • LAL 41\.50 vs GSW .* 🔒 LOCKED/);
+  assert.match(locked, /L\. Doncic PG • LAL vs GSW Final · Wed 41\.50 pts 41\.50 🔒 PG/);
   assert.match(locked, /Yet to play \(0\)/);
 });
 

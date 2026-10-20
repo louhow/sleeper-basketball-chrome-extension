@@ -20,7 +20,7 @@
     const rows = (title, slotFor, a, b, count = 0) => {
       const n = Math.max(a.length, b.length, count);
       if (!n) return '';
-      return `<h3>${title}</h3>${Array.from({ length: n }, (_, i) => row(s, slotFor(i), left, a[i], right, b[i], false)).join('')}`;
+      return `<h3 class="mu-title">${title}</h3>${Array.from({ length: n }, (_, i) => row(s, slotFor(i), left, a[i], right, b[i], false)).join('')}`;
     };
 
     return `
@@ -29,11 +29,7 @@
         <div class="vs">VS</div>
         ${right ? teamSide(s, right, p2, 'theirs') : '<div class="mu-team theirs bye"><span class="sub">No opponent this week</span></div>'}
       </section>
-      <div class="ytp">
-        <div><b>Yet to play (${left.yetToPlay})</b></div>
-        ${right ? `<div><b>Yet to play (${right.yetToPlay})</b></div>` : ''}
-      </div>
-      <div class="section-head">
+      <div class="mu-starters">
         <div>
           <h3>Starters</h3>
           ${mine.lockable ? `<div class="hint">${s.saving ? 'Saving…' : 'Lock in a finished game before the player\'s next game starts'}</div>` : ''}
@@ -96,6 +92,7 @@
       <div class="mu-meta">
         ${pct == null ? '' : `<b class="${trend}">${pct}% WIN</b>`}
         <span>${record(roster)}${rank ? ` (#${rank})` : ''}</span>
+        <span class="ytp">Yet to play (${sd.yetToPlay})</span>
         <span class="proj">${f2(sd.proj)}</span>
       </div>
     </div>`;
@@ -110,7 +107,7 @@
   }
 
   function playerSide(s, sd, id, cls, starter) {
-    if (!id || id === '0') return `<div class="mp ${cls} empty"><span class="name">Empty</span></div>`;
+    if (!id || id === '0') return `<div class="mp ${cls} empty"><div class="headshot"></div><div class="mp-id"><span class="name">Empty</span></div></div>`;
     const p = s.players[id] || { name: `Player #${id}`, positions: [] };
     const st = sd.states[id] ?? (() => {
       const days = playerDays(sd.l.week, p.team, id);
@@ -119,27 +116,23 @@
     const cur = st.current;
     const curDone = cur?.game.status === 'complete';
     const curValue = cur ? (curDone || cur.actual != null ? cur.actual ?? 0 : cur.proj) : null;
-    return `<div class="mp ${cls}${st.locked ? ' is-locked' : ''}">
-      <div class="mp-head">
-        <img class="headshot" src="${headshot(id)}" alt="">
-        <div class="mp-id">
-          <div class="name">${esc(shortName(p))}${injuryTag(p)}</div>
-          <div class="sub">${positions(p)} <span class="team">• ${esc(p.team || 'FA')}</span></div>
-        </div>
-        <div class="mp-pts">${starter && st.counted ? f2(st.points) : '–'}</div>
+    const ref = `${sd.l.roster.roster_id}:${id}`;
+    // Mirrored on the opponent's side, so the logos sit toward the middle.
+    const who = `<span>${positions(p)} <span class="team">• ${esc(p.team || 'FA')}</span></span>`;
+    const games = `<span class="mp-games">${st.games.map((d) => gameChip(d, st)).join('')}</span>`;
+    const confirming = starter && s.lockConfirm === ref && !st.locked && sd.l.lockable && st.lockable;
+    const result = `<div class="mp-game">
+        ${cur ? `<b>${cur.home ? 'vs' : '@'} ${esc(cur.opponent)}</b>
+          <span class="sub">${esc(status(cur))}</span>` : '<span class="sub">No games</span>'}
       </div>
-      <div class="mp-box">
-        <div class="mp-game">
-          ${cur ? `<b>${cur.home ? 'vs' : '@'} ${esc(cur.opponent)}</b>
-            <span class="sub">${esc(status(cur))}</span>` : '<span class="sub">No games this week</span>'}
-        </div>
-        <div class="mp-val">
-          <span class="sub">${cur ? (curDone ? 'pts' : 'proj') : ''}</span>
-          <b>${f2(curValue)}</b>
-        </div>
-        ${starter ? lockControl(s, sd, id, st) : ''}
+      <div class="mp-pts"><b>${starter && st.counted ? f2(st.points) : '–'}</b>${cur ? `<span>${curDone ? 'pts' : 'proj'} ${f2(curValue)}</span>` : ''}</div>`;
+    return `<div class="mp ${cls}${st.locked ? ' is-locked' : ''}${confirming ? ' confirming' : ''}">
+      <img class="headshot" src="${headshot(id)}" alt="">
+      <div class="mp-id">
+        <div class="name">${esc(shortName(p))}${injuryTag(p)}</div>
+        <div class="sub">${cls === 'theirs' ? `${games}${who}` : `${who}${games}`}</div>
       </div>
-      <div class="mp-games">${st.games.map((d) => gameChip(d, st)).join('')}</div>
+      ${confirming ? lockConfirm(s, st, ref) : `${result}<div class="mp-lk">${starter ? lockControl(s, sd, st, ref) : ''}</div>`}
     </div>`;
   }
 
@@ -150,21 +143,21 @@
     return d.game.start ? `${day} ${gameTime(d.game.start)}` : day;
   }
 
-  function lockControl(s, sd, id, st) {
-    if (st.locked) return '<span class="lk locked">🔒 LOCKED</span>';
-    if (!sd.l.lockable) return '<span class="lk">NOT LOCKED</span>';
+  // Locked games show a lock on either side; only the owner gets the LOCK button.
+  function lockControl(s, sd, st, ref) {
+    if (st.locked) return '<span class="lk locked" title="Locked in" aria-label="Locked in">🔒</span>';
+    if (!sd.l.lockable) return '';
     if (!st.lockable) {
-      return '<button class="lk" disabled title="Opens once a game ends, until the player\'s next game starts">🔓 LOCK-IN</button>';
+      return '<button class="lk" disabled title="Opens once a game ends, until the player\'s next game starts">LOCK</button>';
     }
-    const value = f2(st.current?.actual ?? 0);
-    const ref = `${sd.l.roster.roster_id}:${id}`;
-    if (s.lockConfirm === ref) {
-      return `<span class="lk-confirm">
-        <button class="lk go" data-lock-confirm="${esc(ref)}" ${s.saving ? 'disabled' : ''}>Lock ${value}</button>
-        <button class="lk cancel" data-lock-cancel aria-label="Cancel">✕</button>
-      </span>`;
-    }
-    return `<button class="lk open" data-lock="${esc(ref)}" ${s.saving ? 'disabled' : ''} title="Lock in ${esc(status(st.current))}">🔓 LOCK-IN</button>`;
+    return `<button class="lk open" data-lock="${esc(ref)}" ${s.saving ? 'disabled' : ''} title="Lock in ${esc(status(st.current))}">LOCK</button>`;
+  }
+
+  function lockConfirm(s, st, ref) {
+    return `<span class="lk-confirm">
+      <button class="lk go" data-lock-confirm="${esc(ref)}" ${s.saving ? 'disabled' : ''}>Lock ${f2(st.current?.actual ?? 0)}</button>
+      <button class="lk cancel" data-lock-cancel aria-label="Cancel">✕</button>
+    </span>`;
   }
 
   function gameChip(d, st) {

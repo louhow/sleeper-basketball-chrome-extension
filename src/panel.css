@@ -683,44 +683,44 @@ ol.calls {
   text-decoration: underline;
 }
 
-/* Matchup */
+/* Matchup: compact team cards, then one line per player on each side of the slot. */
 .mu-head {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 .mu-head .vs {
   position: absolute;
   top: 50%;
   left: 50%;
   z-index: 1;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
-  margin: -20px 0 0 -20px;
+  margin: -16px 0 0 -16px;
   border-radius: 50%;
   background: #1b2433;
   border: 1px solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 .mu-team {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   grid-template-areas: "av who pts" "bar bar bar" "meta meta meta";
   align-items: center;
-  column-gap: 12px;
-  row-gap: 8px;
-  padding: 14px 16px;
+  column-gap: 10px;
+  row-gap: 5px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--card);
 }
 .mu-team.theirs {
-  grid-template-columns: auto minmax(0, 1fr) 48px;
+  grid-template-columns: auto minmax(0, 1fr) 36px;
   grid-template-areas: "pts who av" "bar bar bar" "meta meta meta";
   text-align: right;
 }
@@ -730,26 +730,30 @@ ol.calls {
 }
 .mu-team .avatar {
   grid-area: av;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
 }
 .mu-who {
   grid-area: who;
   min-width: 0;
 }
+.mu-who .sub {
+  font-size: 11px;
+  line-height: 1.2;
+}
 .mu-who .team-name {
-  font-size: 16px;
+  font-size: 15px;
 }
 .mu-pts {
   grid-area: pts;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
 .mu-bar {
   grid-area: bar;
   display: flex;
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -776,7 +780,8 @@ ol.calls {
   align-items: baseline;
   gap: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .mu-meta b {
   background: none !important;
@@ -784,6 +789,7 @@ ol.calls {
 }
 .mu-meta .proj {
   margin-left: auto;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .mu-team.theirs .mu-meta {
@@ -793,128 +799,163 @@ ol.calls {
   margin-left: 0;
   margin-right: auto;
 }
-.ytp {
+.mu-starters {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 12px;
+  margin: 12px 0 6px;
+}
+.mu-starters h3,
+h3.mu-title {
+  margin: 0;
+  font-size: 14px;
+}
+h3.mu-title {
+  margin: 14px 0 6px;
+}
+.mu-starters .hint {
+  margin-top: 0;
+  font-size: 11px;
 }
 
 .mu-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  margin-bottom: 10px;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 3px;
 }
 .mu-row > .slot {
-  margin-top: 12px;
+  width: 40px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 .mp {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 64px 56px 40px;
+  grid-template-areas: "hs id game pts lk";
+  align-items: center;
+  column-gap: 6px;
   min-width: 0;
-  padding: 10px 12px;
+  height: 44px;
+  padding: 0 8px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--card);
 }
+.mp.theirs {
+  grid-template-columns: 40px 56px 64px minmax(0, 1fr) 26px;
+  grid-template-areas: "lk pts game id hs";
+  text-align: right;
+}
+.mp.confirming {
+  grid-template-areas: "hs id cf cf cf";
+}
+.mp.theirs.confirming {
+  grid-template-areas: "cf cf cf id hs";
+}
+.mp .headshot {
+  grid-area: hs;
+  width: 26px;
+  height: 26px;
+}
+.mp.empty .headshot {
+  background: none;
+}
 .mp.empty {
-  display: grid;
-  place-items: center;
-  min-height: 60px;
   color: var(--muted);
   font-weight: 700;
 }
-.mp.empty:not(:has(.name)) {
-  border-style: dashed;
-  background: transparent;
+.mp.empty .name {
+  color: var(--muted);
 }
 .mp.is-locked {
   border-color: rgba(248, 210, 75, 0.45);
 }
-.mp-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.mp.theirs .mp-head,
-.mp.theirs .mp-box {
-  flex-direction: row-reverse;
-  text-align: right;
-}
-.mp-head .headshot {
-  width: 36px;
-  height: 36px;
-}
 .mp-id {
-  flex: 1;
+  grid-area: id;
   min-width: 0;
 }
 .mp-id .name {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .mp-id .sub {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
-.mp-id .pos {
-  font-size: 11px;
+.mp.theirs .mp-id .sub {
+  justify-content: flex-end;
 }
+.mp-id .pos,
 .mp-id .team {
   font-size: 11px;
 }
-.mp-pts {
-  flex: none;
-  font-size: 16px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-.mp-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.22);
-}
 .mp-game {
-  flex: 1;
-  min-width: 0;
+  grid-area: game;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .mp-game b {
-  font-size: 13px;
+  font-size: 12px;
 }
-.mp-game .sub,
-.mp-val .sub {
-  font-size: 11px;
+.mp-game .sub {
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.mp-val {
+.mp-pts {
+  grid-area: pts;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.mp.theirs .mp-val {
+.mp.theirs .mp-pts {
   align-items: flex-start;
+}
+.mp-pts b {
+  font-size: 14px;
+  font-weight: 900;
+}
+.mp-pts span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.mp-lk {
+  grid-area: lk;
+  display: flex;
+  justify-content: flex-end;
+}
+.mp.theirs .mp-lk {
+  justify-content: flex-start;
 }
 .lk {
   flex: none;
-  padding: 6px 8px;
-  border-radius: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+button.lk {
+  background: rgba(255, 255, 255, 0.06);
 }
 button.lk.open {
   background: rgba(0, 206, 184, 0.16);
@@ -924,15 +965,24 @@ button.lk.open:hover:not(:disabled) {
   background: rgba(0, 206, 184, 0.28);
 }
 .lk.locked {
+  padding: 0;
+  background: none;
   color: var(--warn);
+  font-size: 14px;
 }
 .lk-confirm {
+  grid-area: cf;
   display: flex;
+  justify-content: flex-end;
   gap: 4px;
+}
+.mp.theirs .lk-confirm {
+  justify-content: flex-start;
 }
 button.lk.go {
   background: var(--warn);
   color: #1a1400;
+  font-size: 11px;
 }
 button.lk.go:hover:not(:disabled) {
   background: #ffe27a;
@@ -940,38 +990,53 @@ button.lk.go:hover:not(:disabled) {
 button.lk.cancel {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
+  font-size: 11px;
 }
 .mp-games {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 3px;
 }
 .mp.theirs .mp-games {
-  justify-content: flex-end;
+  margin: 0 3px 0 0;
 }
 .chip {
-  width: 26px;
-  height: 26px;
+  width: 15px;
+  height: 15px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
 }
 .chip img {
-  width: 20px;
-  height: 20px;
+  width: 13px;
+  height: 13px;
   object-fit: contain;
 }
 .chip.done {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 .chip.current {
   opacity: 1;
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 1.5px var(--accent);
 }
 .chip.locked {
   opacity: 1;
-  box-shadow: 0 0 0 2px var(--warn);
+  box-shadow: 0 0 0 1.5px var(--warn);
+}
+
+/* Narrow panels: the game moves under the name, keeping one row. */
+@container (max-width: 640px) {
+  .mp {
+    grid-template-columns: 26px minmax(0, 1fr) 52px 40px;
+    grid-template-areas: "hs id pts lk";
+  }
+  .mp.theirs {
+    grid-template-columns: 40px 52px minmax(0, 1fr) 26px;
+    grid-template-areas: "lk pts id hs";
+  }
+  .mp-game {
+    display: none;
+  }
 }
 
 /* Dialogs (waiver bids, claims) in their own host over the whole page, styled
