@@ -547,13 +547,27 @@
       Object.assign(state.rosters.find((r) => r.roster_id === rosterId), data.roster_update_taxi);
     }
 
+    async function saveReserve(rosterId, reserve) {
+      const data = await api.graphql('roster_update_reserve', `mutation roster_update_reserve {
+  roster_update_reserve(league_id: ${JSON.stringify(leagueId)}, roster_id: ${Number(rosterId)}, reserve: ${JSON.stringify(reserve)}) {
+    roster_id starters players reserve taxi
+  }
+}`, { auth: true });
+      Object.assign(state.rosters.find((r) => r.roster_id === rosterId), data.roster_update_reserve);
+    }
+
     // Moves players between two spots. Taxi saves first, like Sleeper's web app,
-    // so a starter displaced by a taxi player lands on an up-to-date roster.
+    // so a starter displaced by a taxi player lands on an up-to-date roster. IR
+    // goes in three steps so no save ever has a player both starting and on IR:
+    // starters going to IR leave the lineup, then IR saves, then the final lineup.
     function swap(fromRef, toRef) {
       const lineup = ui.lineup(state);
       const next = model.applyMove(fromRef, toRef, lineup);
       const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       const taxiChanged = !same(next.taxi, lineup.taxi);
+      const reserveChanged = !same(next.reserve, lineup.reserve);
+      const toReserve = new Set(next.reserve.filter((id) => !lineup.reserve.includes(id)));
+      const benched = lineup.starters.map((id) => (toReserve.has(id) ? '0' : id));
       const startersChanged = !same(next.starters, lineup.starters);
       const moved = model.describeMove(lineup, next)
         .map(({ id, to }) => `${ui.shortName(state.players[id] || { name: `Player #${id}` })} to ${to}`)
@@ -561,7 +575,9 @@
       state.swap = null;
       return save(async () => {
         if (taxiChanged) await saveTaxi(lineup.roster.roster_id, next.taxi);
-        if (startersChanged) await saveStarters(next.starters);
+        if (reserveChanged && !same(benched, lineup.starters)) await saveStarters(benched);
+        if (reserveChanged) await saveReserve(lineup.roster.roster_id, next.reserve);
+        if (startersChanged && !(reserveChanged && same(benched, next.starters))) await saveStarters(next.starters);
       }, `Saved: ${moved}`, `Couldn't move ${moved}`);
     }
 

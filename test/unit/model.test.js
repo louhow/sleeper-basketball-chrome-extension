@@ -186,9 +186,9 @@ test('taxi moves while open: eligible players go on, displaced taxi players come
   assert.deepEqual(plain(model.swapTargets('t:kid', l)), ['s:0', 'b:rookie'],
     'taxi player trades with taxi-eligible starters whose slot it fits, or taxi-eligible bench players');
   assert.deepEqual(plain(model.swapTargets('te:0', l)), ['s:0', 'b:rookie'], 'an open slot takes any eligible player');
-  assert.deepEqual(plain(model.applyMove('b:rookie', 't:kid', l)), { starters: l.starters, taxi: ['rookie'] });
-  assert.deepEqual(plain(model.applyMove('s:0', 'te:0', l)), { starters: ['0', 'sg', 'sf', '0', 'c2'], taxi: ['kid', 'pg'] });
-  assert.deepEqual(plain(model.applyMove('t:kid', 's:0', l)), { starters: ['kid', 'sg', 'sf', '0', 'c2'], taxi: ['pg'] });
+  assert.deepEqual(plain(model.applyMove('b:rookie', 't:kid', l)), { starters: l.starters, taxi: ['rookie'], reserve: [] });
+  assert.deepEqual(plain(model.applyMove('s:0', 'te:0', l)), { starters: ['0', 'sg', 'sf', '0', 'c2'], taxi: ['kid', 'pg'], reserve: [] });
+  assert.deepEqual(plain(model.applyMove('t:kid', 's:0', l)), { starters: ['kid', 'sg', 'sf', '0', 'c2'], taxi: ['pg'], reserve: [] });
 });
 
 test('taxi moves after the deadline: only off taxi, into an open bench spot', () => {
@@ -197,7 +197,7 @@ test('taxi moves after the deadline: only off taxi, into an open bench spot', ()
   assert.deepEqual(plain(model.swapTargets('b:rookie', full)), ['s:2', 's:4'], 'lineup swaps still work, nothing moves onto taxi');
   const room = taxiLineup({ taxiOpen: false, benchRoom: 1 });
   assert.deepEqual(plain(model.swapTargets('t:kid', room)), ['be:0']);
-  assert.deepEqual(plain(model.applyMove('t:kid', 'be:0', room)), { starters: room.starters, taxi: [] });
+  assert.deepEqual(plain(model.applyMove('t:kid', 'be:0', room)), { starters: room.starters, taxi: [], reserve: [] });
 });
 
 test('describeMove names where each moved player ends up', () => {
@@ -206,4 +206,54 @@ test('describeMove names where each moved player ends up', () => {
   assert.deepEqual(moves('b:rookie', 't:kid'), [{ id: 'kid', to: 'bench' }, { id: 'rookie', to: 'taxi' }]);
   assert.deepEqual(moves('t:kid', 's:0'), [{ id: 'pg', to: 'taxi' }, { id: 'kid', to: 'PG' }]);
   assert.deepEqual(moves('s:0', 's:1'), [{ id: 'pg', to: 'G' }, { id: 'sg', to: 'PG' }]);
+});
+
+// Starters pg, sg, sf, (empty), c2; bench: an Out center and a healthy guard; IR: one hurt player, one open slot.
+const irLineup = (overrides = {}) => ({
+  ...lineup(),
+  bench: ['out', 'fine'],
+  reserve: ['hurt'],
+  reserveEditable: true,
+  reserveRoom: 1,
+  benchRoom: 0,
+  settings: { reserve_slots: 2, reserve_allow_out: 1, reserve_allow_dtd: 1 },
+  players: {
+    ...lineup().players,
+    pg: { positions: ['PG'], injury: 'Out' },
+    out: { positions: ['C'], injury: 'Out' },
+    fine: { positions: ['PG'] },
+    hurt: { positions: ['PG', 'SG'], injury: 'IR' },
+  },
+  ...overrides,
+});
+
+test('IR eligibility: IR and PUP always, other statuses when the league allows them', () => {
+  const settings = { reserve_allow_out: 1, reserve_allow_dtd: 1 };
+  assert.equal(model.reserveEligible({ injury: 'Out' }, settings), true);
+  assert.equal(model.reserveEligible({ injury: 'DTD' }, settings), true);
+  assert.equal(model.reserveEligible({ injury: 'IR' }, {}), true);
+  assert.equal(model.reserveEligible({ injury: 'Questionable' }, settings), false);
+  assert.equal(model.reserveEligible({ injury: 'Sus' }, settings), false);
+  assert.equal(model.reserveEligible({}, settings), false);
+});
+
+test('IR moves: eligible players go onto IR, and IR players come off into their spot', () => {
+  const l = irLineup();
+  assert.ok(model.swapTargets('b:out', l).includes('re:0'), 'an Out bench player can fill the open IR slot');
+  assert.ok(model.swapTargets('b:out', l).includes('r:hurt'), 'or trade places with the IR player');
+  assert.ok(model.swapTargets('s:0', l).includes('re:0'), 'an Out starter can go to IR');
+  assert.ok(!model.swapTargets('b:fine', l).some((r) => r.startsWith('r')), 'a healthy player cannot');
+  assert.deepEqual(plain(model.swapTargets('r:hurt', l)), ['s:0', 'b:out'], 'full roster: IR player only trades with eligible players it fits');
+  assert.deepEqual(plain(model.applyMove('b:out', 're:0', l)), { starters: l.starters, taxi: [], reserve: ['hurt', 'out'] });
+  assert.deepEqual(plain(model.applyMove('r:hurt', 's:0', l)), { starters: ['hurt', 'sg', 'sf', '0', 'c2'], taxi: [], reserve: ['pg'] });
+  assert.deepEqual(plain(model.describeMove(l, model.applyMove('s:0', 're:0', l))), [{ id: 'pg', to: 'IR' }]);
+});
+
+test('IR players come off into an open spot only when the active roster has room', () => {
+  const openUtil = { starters: ['pg', 'sg', 'sf', 'c2', '0'] };
+  const room = irLineup({ ...openUtil, benchRoom: 1 });
+  const targets = plain(model.swapTargets('r:hurt', room));
+  assert.ok(targets.includes('be:0') && targets.includes('s:4'), 'open bench spot or the empty UTIL slot');
+  assert.deepEqual(plain(model.applyMove('r:hurt', 'be:0', room)), { starters: room.starters, taxi: [], reserve: [] });
+  assert.ok(!plain(model.swapTargets('r:hurt', irLineup(openUtil))).includes('s:4'), 'no room: the empty slot is off limits');
 });

@@ -109,16 +109,28 @@
       settings.taxi_deadline === 0;
   }
 
+  // IR rules, ported from Sleeper's apps: IR and PUP always qualify, other
+  // injury statuses only when the league allows them.
+  const RESERVE_ALLOW = { Out: 'reserve_allow_out', Sus: 'reserve_allow_sus', Doubtful: 'reserve_allow_doubtful', DTD: 'reserve_allow_dtd', DNR: 'reserve_allow_dnr', COV: 'reserve_allow_cov', NA: 'reserve_allow_na' };
+  function reserveEligible(player, settings) {
+    const status = player?.injury;
+    if (!status) return false;
+    if (status === 'IR' || status === 'PUP') return true;
+    return Boolean(RESERVE_ALLOW[status] && settings[RESERVE_ALLOW[status]]);
+  }
+
   // A lineup spot, by ref:
   //   's:<i>'  starter slot i ('0' in starters means empty, like Sleeper)
   //   'b:<id>' bench player       'be:<k>' open bench spot (roster has room)
   //   't:<id>' taxi player        'te:<k>' open taxi slot
+  //   'r:<id>' IR player          're:<k>' open IR slot
   function spotOf(ref, l) {
     const cut = ref.indexOf(':');
     const kind = ref.slice(0, cut);
     const key = ref.slice(cut + 1);
     if (kind === 's') return { ref, kind, index: Number(key), slot: l.slots[Number(key)] ?? 'UTIL', id: l.starters[Number(key)] };
     if (kind === 'b' || kind === 'be') return { ref, kind, slot: 'BN', id: kind === 'b' ? key : null };
+    if (kind === 'r' || kind === 're') return { ref, kind, slot: 'IR', id: kind === 'r' ? key : null };
     return { ref, kind, slot: 'TX', id: kind === 't' ? key : null };
   }
 
@@ -144,18 +156,33 @@
     return false;
   }
 
+  // One direction of an IR move (from = the IR side). Only injured players
+  // the league allows go onto IR; coming off IR needs room on the active roster,
+  // unless the player trades places with someone going onto IR.
+  function reserveMove(from, to, l) {
+    if (from.slot !== 'IR' || to.slot === 'IR' || to.slot === 'TX') return false;
+    const pf = occupant(l.players, from.id);
+    const pt = occupant(l.players, to.id);
+    if (pt) return reserveEligible(pt, l.settings) && (!pf || fits(to.slot, pf));
+    if (!pf) return false;
+    return to.kind === 'be' || (to.kind === 's' && l.benchRoom > 0 && fits(to.slot, pf));
+  }
+
   function canMove(a, b, l) {
     if (a.ref === b.ref) return false;
     if (a.slot === 'TX' || b.slot === 'TX') return taxiMove(a, b, l) || taxiMove(b, a, l);
+    if (a.slot === 'IR' || b.slot === 'IR') return reserveMove(a, b, l) || reserveMove(b, a, l);
     return canSwap(a, b, l.players);
   }
 
-  // Every spot in a lineup. Taxi and open bench spots only count when taxi is editable.
+  // Every spot in a lineup. Taxi, IR and open bench spots only count when they're editable.
   function spotRefs(l) {
     const refs = [...l.starters.map((_, i) => `s:${i}`), ...l.bench.map((id) => `b:${id}`)];
-    if (!l.taxiEditable) return refs;
-    const open = (prefix, n) => Array.from({ length: Math.max(0, n) }, (_, k) => `${prefix}:${k}`);
-    return [...refs, ...open('be', l.benchRoom), ...(l.taxi || []).map((id) => `t:${id}`), ...open('te', l.taxiRoom)];
+    const open = (prefix, n) => Array.from({ length: Math.max(0, n || 0) }, (_, k) => `${prefix}:${k}`);
+    if (l.taxiEditable || l.reserveEditable) refs.push(...open('be', l.benchRoom));
+    if (l.taxiEditable) refs.push(...(l.taxi || []).map((id) => `t:${id}`), ...open('te', l.taxiRoom));
+    if (l.reserveEditable) refs.push(...(l.reserve || []).map((id) => `r:${id}`), ...open('re', l.reserveRoom));
+    return refs;
   }
 
   // Refs of every spot the selected spot can trade places with.
@@ -164,33 +191,38 @@
     return spotRefs(l).filter((ref) => canMove(from, spotOf(ref, l), l));
   }
 
-  // Starters and taxi after two spots trade occupants. The bench is implicit:
+  // Starters, taxi and IR after two spots trade occupants. The bench is implicit:
   // whoever isn't starting, on taxi or on IR.
   function applyMove(fromRef, toRef, l) {
     const a = spotOf(fromRef, l);
     const b = spotOf(toRef, l);
     const starters = [...l.starters];
-    let taxi = [...(l.taxi || [])];
+    const lists = { t: [...(l.taxi || [])], r: [...(l.reserve || [])] };
     const place = (spot, id) => {
       if (spot.kind === 's') starters[spot.index] = id || '0';
-      else if (spot.kind === 't') taxi = id ? taxi.map((x) => (x === spot.id ? id : x)) : taxi.filter((x) => x !== spot.id);
-      else if (spot.kind === 'te' && id) taxi.push(id);
+      const key = { t: 't', te: 't', r: 'r', re: 'r' }[spot.kind];
+      if (!key) return;
+      // A player spot swaps its occupant (or empties); an open slot gains one.
+      if (spot.id) lists[key] = id ? lists[key].map((x) => (x === spot.id ? id : x)) : lists[key].filter((x) => x !== spot.id);
+      else if (id) lists[key].push(id);
     };
     const idOf = (spot) => (spot.id && spot.id !== '0' ? spot.id : null);
     const [ida, idb] = [idOf(a), idOf(b)];
     place(a, idb);
     place(b, ida);
-    return { starters, taxi };
+    return { starters, taxi: lists.t, reserve: lists.r };
   }
 
-  // Where each player affected by a move ends up: [{ id, to: slot | 'taxi' | 'bench' }].
+  // Where each player affected by a move ends up: [{ id, to: slot | 'taxi' | 'IR' | 'bench' }].
   function describeMove(before, after) {
     const where = (l, id) => {
       const i = l.starters.indexOf(id);
       if (i >= 0) return before.slots[i] ?? 'UTIL';
+      if ((l.reserve || []).includes(id)) return 'IR';
       return (l.taxi || []).includes(id) ? 'taxi' : 'bench';
     };
-    const ids = new Set([...before.starters, ...(before.taxi || []), ...after.starters, ...(after.taxi || [])]);
+    const ids = new Set([...before.starters, ...(before.taxi || []), ...(before.reserve || []),
+      ...after.starters, ...(after.taxi || []), ...(after.reserve || [])]);
     return [...ids]
       .filter((id) => id && id !== '0')
       .map((id) => ({ id, from: where(before, id), to: where(after, id) }))
@@ -316,7 +348,7 @@
 
   return {
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
-    taxiEligible, taxiOpen,
+    taxiEligible, taxiOpen, reserveEligible,
     lockedGameId, lockState, winProbability, standingsRanks,
     FAAB, rosterRoom, faabLeft, claimError, sortClaims,
   };

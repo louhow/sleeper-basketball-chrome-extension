@@ -12,6 +12,7 @@ How the extension works: what it shows, the Sleeper API calls it makes, and how 
 - Draft picks held, including picks acquired by trade.
 - Lineup swaps on your own roster: tap a slot badge, then one of the highlighted players (G takes PG/SG, F takes SF/PF, UTIL and bench take anyone).
 - Taxi moves on your own roster, following the league's taxi settings (see below). Only badges with a legal move are clickable.
+- IR moves on your own roster: players whose injury status the league allows (`reserve_allow_out`, `_dtd`, `_dnr` and so on; IR and PUP always) can go onto IR from the bench or the lineup, or trade places with an IR player. Coming off IR into an open spot needs room on the active roster.
 
 #### Taxi rules
 
@@ -60,6 +61,7 @@ It enables:
 - `update_matchup_leg(...)` during the season, `roster_update_starters(...)` outside it: saving a swap.
 - `update_matchup_leg(..., starters_games: $starters_games)`: Lock-In. The variable is the week's full player -> game map as JSON, with the new lock added.
 - `roster_update_taxi(league_id, roster_id, taxi)`: taxi moves. Saved before any starter change, like Sleeper's web app.
+- `roster_update_reserve(league_id, roster_id, reserve)`: IR moves. A starter going to IR is first saved out of the lineup, then IR, then the final lineup, so no save has a player both starting and on IR.
 - `submit_waiver_claim(league_id, k_adds, v_adds, k_drops, v_drops, k_settings: ["waiver_bid"], v_settings: [bid])`: a waiver claim, as Sleeper's web app sends it for NFL. Adds and drops map player ids to the roster id.
 - `league_create_transaction(league_id, type: "free_agent", k_adds, v_adds, k_drops, v_drops)`: a free-agent add.
 - `league_transactions_filtered(league_id, roster_id_filters, type_filters: ["waiver"], status_filters: ["pending"])`: pending claims.
@@ -81,7 +83,7 @@ It enables:
 | `GET /players/nba/research/<type>/<season>/<week>?league_type=` | Rostered and start percentages |
 | `POST sleeper.com/graphql` `scores(...)` | Game times and home/away |
 | `POST sleeper.com/graphql` `roster_standings(...)` | Standings rank |
-| `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters`, `roster_update_taxi` | Logged-in lineup data, swaps, Lock-In and taxi (see above) |
+| `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters`, `roster_update_taxi`, `roster_update_reserve` | Logged-in lineup data, swaps, Lock-In, taxi and IR (see above) |
 | `POST sleeper.com/graphql` `submit_waiver_claim`, `league_create_transaction`, `league_transactions_filtered`, `update_waiver_claim`, `cancel_waiver_claim` | Waiver bids, free-agent adds and pending claims (see above) |
 
 ## Tests

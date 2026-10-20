@@ -1,7 +1,7 @@
 // Pure render functions: (state, api log) -> HTML string for the shadow root.
 (globalThis.SNP ||= {}).view = (() => {
   const { playerDays, lockInDefault, spotRefs, swapTargets, lockedGameId } = globalThis.SNP.model;
-  const { esc, f2, headshot, teamName, avatar, record, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule } =
+  const { esc, f2, headshot, teamName, avatar, record, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, reserveRule } =
     globalThis.SNP.ui;
   const PREVIEW_CHARS = 20000;
   const PAGES = { team: 'Team', matchup: 'Matchup' };
@@ -75,7 +75,7 @@
   // Every player card needs the week's schedule, so these only render once it's loaded.
   function rosterSections(ctx, l, hint) {
     const { s } = ctx;
-    const { slots, starters, bench, taxi, reserve, taxiEditable } = l;
+    const { slots, starters, bench, taxi, reserve, taxiEditable, reserveEditable } = l;
     const settings = s.league.settings || {};
     const card = (slot, id, spot) => playerCard(ctx, slot, id, spot);
     const padded = (ids, count) => [...ids, ...Array(Math.max(0, (count || 0) - ids.length)).fill('0')];
@@ -83,12 +83,16 @@
     const taxiCards = taxiEditable
       ? taxi.map((id) => card('TX', id, `t:${id}`)).join('') + openSpots('te', l.taxiRoom, 'TX')
       : padded(taxi, settings.taxi_slots).map((id) => card('TX', id)).join('');
-    const benchCards = bench.map((id) => card('BN', id, `b:${id}`)).join('') + (taxiEditable ? openSpots('be', l.benchRoom, 'BN') : '');
+    const reserveCards = reserveEditable
+      ? reserve.map((id) => card('IR', id, `r:${id}`)).join('') + openSpots('re', l.reserveRoom, 'IR')
+      : padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('');
+    const benchCards = bench.map((id) => card('BN', id, `b:${id}`)).join('') +
+      (taxiEditable || reserveEditable ? openSpots('be', l.benchRoom, 'BN') : '');
     return `
       ${sectionHead(ctx, 'Starters', hint)}
       ${starters.map((id, i) => card(slots[i] ?? 'UTIL', id, `s:${i}`)).join('')}
       ${benchCards ? `${sectionHead(ctx, 'Bench')}${benchCards}` : ''}
-      ${reserve.length || settings.reserve_slots ? `${sectionHead(ctx, 'Injured Reserve')}${padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('')}` : ''}
+      ${reserve.length || settings.reserve_slots ? `${sectionHead(ctx, 'Injured Reserve', reserveEditable ? esc(reserveRule(settings)) : '', 'ir-head')}${reserveCards}` : ''}
       ${taxi.length || settings.taxi_slots ? `${sectionHead(ctx, 'Taxi Squad', taxiEditable ? esc(taxiRule(l)) : '', 'taxi-head')}${taxiCards}` : ''}
       ${picksView(s)}`;
   }

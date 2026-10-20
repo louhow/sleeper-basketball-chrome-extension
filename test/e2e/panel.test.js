@@ -88,6 +88,7 @@ const sleeper = {
   rosters: null, // league rosters as the mock's Sleeper currently has them
   rostersLoading: null,
   claims: [], // waiver claims submitted through the mock
+  injured: new Set(), // player ids the players feed reports as Out
   // When set, each team's first game of the week is reported as finished a few
   // hours ago, with projections standing in as stats, so Lock-In has something to lock.
   midWeek: false,
@@ -180,6 +181,12 @@ async function answerGraphql(route) {
     else claim.status = 'cancelled';
     return json({ data: { [/update/.test(query) ? 'update_waiver_claim' : 'cancel_waiver_claim']: claim } });
   }
+  if (/mutation roster_update_reserve\b/.test(query)) {
+    sleeper.mutations.push({ query, variables });
+    const roster = sleeper.rosters.find((r) => r.roster_id === Number(query.match(/roster_id: (\d+)/)[1]));
+    roster.reserve = JSON.parse(query.match(/reserve: (\[[^\]]*\])/)[1]);
+    return json({ data: { roster_update_reserve: roster } });
+  }
   if (/mutation roster_update_taxi\b/.test(query)) {
     sleeper.mutations.push({ query, variables });
     const rosterId = Number(query.match(/roster_id: (\d+)/)[1]);
@@ -218,6 +225,13 @@ before(async () => {
       ? route.fulfill({ contentType: 'text/html', body: documentBody })
       : route.continue());
   await context.route('https://sleeper.com/graphql', answerGraphql);
+  await context.route('https://api.sleeper.app/v1/players/nba', async (route) => {
+    if (!sleeper.injured.size) return route.continue();
+    const res = await route.fetch();
+    const players = await res.json();
+    for (const id of sleeper.injured) players[id].injury_status = 'Out';
+    return route.fulfill({ response: res, json: players });
+  });
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
     if (!sleeper.midWeek) return route.continue();
     const url = route.request().url().replace('/stats/', '/projections/');
@@ -345,7 +359,7 @@ test('logged in: swaps a bench player into the lineup', async () => {
   await page.goto(TEAM_URL);
   await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
   await page.locator(panel('button.slot')).first().waitFor({ timeout: 30000 });
-  assert.match(await shadowText('.rhead:not(.taxi-head) .hint'), /Tap a position to update your lineup/);
+  assert.match(await shadowText('.rhead:first-of-type .hint'), /Tap a position to update your lineup/);
   assert.match(await shadowText('.team-card'), /proj 157\.23/, 'uses the server projection from matchup_legs');
 
   // Pick the first bench player, then the first highlighted starter slot.
@@ -662,5 +676,56 @@ test('waivers: ADD on a free agent adds them right away, with a drop', async () 
   assert.deepEqual(variables.k_drops, [dropId]);
   const myRoster = sleeper.rosters.find((r) => r.owner_id === sleeper.me);
   assert.ok(myRoster.players.includes(freeAgent.id) && !myRoster.players.includes(dropId), 'roster updated');
+  documentBody = LOGGED_OUT;
+});
+
+test('IR: Out players move onto IR from the bench or the lineup', async () => {
+  documentBody = LOGGED_IN;
+  sleeper.midWeek = false;
+  sleeper.rosters = null;
+  sleeper.legs = {};
+  const users = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/users`)).json();
+  sleeper.me = users.find((u) => u.display_name === 'louhow').user_id;
+  const rosters = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)).json();
+  const myRoster = rosters.find((r) => r.owner_id === sleeper.me);
+  await seedLegs(1);
+  const starters = sleeper.legs[1].find((l) => l.roster_id === myRoster.roster_id).starters;
+  const benchId = myRoster.players.find((id) => !starters.includes(id) && !(myRoster.taxi || []).includes(id) && !(myRoster.reserve || []).includes(id));
+  const starterId = starters[0];
+  sleeper.injured = new Set([benchId, starterId]);
+
+  await page.goto(TEAM_URL);
+  await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
+  await page.locator(panel('[data-action="refresh"]')).click(); // refetch players with the injuries
+  await page.locator(panel('.ir-head .hint')).waitFor({ timeout: 30000 });
+  assert.match(await shadowText('.ir-head .hint'), /IR, Out, DTD and DNR players can move to IR\./);
+
+  const before = sleeper.mutations.length;
+  await page.locator(panel(`[data-spot="b:${benchId}"]`)).click();
+  await page.locator(panel('.card.target button.slot.ir[data-spot="re:0"]')).click();
+  await page.locator(panel('.notice.ok')).waitFor();
+  assert.match(await shadowText('.notice.ok'), / to IR$/);
+  const benchMoves = sleeper.mutations.slice(before);
+  assert.equal(benchMoves.length, 1, 'bench to IR only saves IR');
+  assert.match(benchMoves[0].query, new RegExp(`roster_update_reserve\\(league_id: "${LEAGUE}", roster_id: ${myRoster.roster_id}, reserve: \\["${benchId}"\\]\\)`));
+  await page.locator(panel(`[data-spot="r:${benchId}"]`)).waitFor();
+  await page.locator(panel('.notice.ok')).waitFor({ state: 'detached', timeout: 5000 });
+
+  const mid = sleeper.mutations.length;
+  await page.locator(panel('[data-spot="s:0"]')).click();
+  await page.locator(panel('.card.target button.slot.ir[data-spot="re:0"]')).click();
+  await page.locator(panel('.notice.ok')).waitFor();
+  const starterMoves = sleeper.mutations.slice(mid);
+  assert.deepEqual(starterMoves.map((m) => m.query.match(/mutation (\w+)/)[1]), ['update_matchup_leg', 'roster_update_reserve'],
+    'the starter leaves the lineup before going on IR');
+  assert.match(starterMoves[0].query, /starters: \["0",/);
+  await page.locator(panel(`[data-spot="r:${starterId}"]`)).waitFor();
+  await page.locator(panel(".ir-head")).evaluate((h) => h.scrollIntoView());
+  await page.screenshot({ path: `${OUT}ir-moved.png` });
+
+  await page.reload();
+  await page.locator(panel(`[data-spot="r:${starterId}"]`)).waitFor({ timeout: 30000 });
+  assert.ok(await page.locator(panel(`[data-spot="r:${benchId}"]`)).count(), 'both stay on IR after reload');
+  sleeper.injured = new Set();
   documentBody = LOGGED_OUT;
 });

@@ -112,6 +112,9 @@
       taxiEditable: editable && (settings.taxi_slots || 0) > 0 && s.week === s.currentWeek,
       taxiOpen: globalThis.SNP.model.taxiOpen(settings, s.seasonType, s.currentWeek, weekStarted(s)),
       taxiRoom: Math.max(0, (settings.taxi_slots || 0) - taxi.length),
+      // IR also belongs to the roster, so it's edited from the current week too.
+      reserveEditable: editable && (settings.reserve_slots || 0) > 0 && s.week === s.currentWeek,
+      reserveRoom: Math.max(0, (settings.reserve_slots || 0) - reserve.length),
       benchRoom: Math.max(0, (s.league.roster_positions || []).length - active),
     };
   }
@@ -137,7 +140,17 @@
     return `${who} can move to taxi ${until}.`;
   }
 
+  // Which injury statuses the league lets onto IR, e.g. "Out, DTD and DNR players can move to IR."
+  function reserveRule(settings) {
+    const allowed = ['Out', 'Sus', 'Doubtful', 'DTD', 'DNR', 'COV', 'NA']
+      .filter((status) => settings[`reserve_allow_${status.toLowerCase()}`]);
+    const list = ['IR', ...allowed];
+    const names = list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0];
+    return `${names} players can move to IR.`;
+  }
+
   return {
+    reserveRule,
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
     gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, owns,
   };
