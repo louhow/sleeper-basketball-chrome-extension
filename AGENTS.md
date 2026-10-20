@@ -1,0 +1,35 @@
+# Agent notes: Sleeper Basketball Chrome Extension
+
+MV3 Chrome extension that fills Sleeper's web NBA Team and Matchup tabs and enables waivers, using the same APIs as Sleeper's own apps.
+User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features, API calls, tests).
+
+## Workflow
+
+- Commit and push to `main` after each finished, tested change (remote: `github.com/louhow/sleeper-basketball-chrome-extension`, public).
+- Never add Claude as author or co-author on commits.
+- Before committing, run `npm test` (unit) and `npm run test:e2e` (headless Chromium); both must pass with no page errors.
+- Look at the screenshots in `test-results/` after UI changes; layout and spacing matter.
+- Browser testing is headless only (Playwright). The user's real Chrome is for reading live data with their session, not for testing.
+- Writes against the live league (bids, lineup, taxi, IR) only with the user's go-ahead; tell them exactly what is left to undo.
+- npm registry is `registry.npmjs.org` (see `.npmrc`); no work registries.
+
+## Layout
+
+- `manifest.json`: content scripts run at `document_start` on `sleeper.com`, in this order: `scoring`, `model`, `api`, `ui`, `view`, `matchup`, `waivers`, `content`. `page-hook.js` runs separately in the page's MAIN world.
+- `src/model.js`: pure rules (schedule, Lock-In, lineup/taxi/IR moves, waivers, win probability). Unit tested.
+- `src/ui.js`, `src/view.js`, `src/matchup.js`, `src/waivers.js`: pure state -> HTML render functions.
+- `src/content.js`: one session per league (survives tab switches), data loading, saves, events. Renders into a shadow root that replaces Sleeper's "not yet available" placeholder; dialogs render in a separate page-level host.
+- `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and hands clicks to the extension via a `snp:player-action` DOM event, only for leagues the extension marked NBA (`html[data-snp-nba-league]`).
+- `src/panel.css`: all styles, inlined into each shadow root.
+- `test/unit` (node:test, `TZ=America/New_York`), `test/e2e/panel.test.js` (stand-in Sleeper pages, live public API, mocked authenticated GraphQL).
+
+## Conventions and gotchas
+
+- Read league rules from the API (`league.settings`, `scoring_settings`); never hardcode them.
+- Port behavior from Sleeper's own web bundle when it exists (mutation shapes, eligibility, dialog wording) instead of inventing it.
+- Logged-in calls send `localStorage.token` as `Authorization`; never log or render it.
+- Public `/v1/league/<id>/rosters` is CDN-cached for minutes; when logged in read rosters via GraphQL `league_rosters`.
+- In season, lineups live on the week's matchup leg (`update_matchup_leg`); outside it, `roster_update_starters`.
+- Save order: taxi before starters; a starter going to IR leaves the lineup, then IR saves, then the final lineup.
+- Nothing renders until the first league + week load is done, so the user never sees a half-built panel or Sleeper's placeholder.
+- Writing style: no em-dashes; one sentence per line in long Markdown.
