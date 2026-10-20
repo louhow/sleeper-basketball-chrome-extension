@@ -155,9 +155,8 @@
       ${slotBadge(slot, button)}
       <img class="headshot" src="${headshot(id)}" alt="">
       <div class="info">
-        <div class="line1"><span class="name">${esc(p.name)}</span>${injuryTag(p)}</div>
-        <div class="line2">${positions(p)} <span class="team">${esc(p.team || 'FA')}</span>
-          <span class="pct" title="Rostered / started in leagues like this one">${pct(research?.owned)} rost · ${pct(research?.started)} start</span></div>
+        <div class="line1"><span class="name">${esc(p.name)}</span>${positions(p)}<span class="team">- ${esc(p.team || 'FA')}</span>${injuryTag(p)}</div>
+        <div class="line2" title="Rostered and started in leagues like this one"><b>${pct(research?.owned)}</b> Rostered<span class="bar">|</span><b>${pct(research?.started)}</b> Start</div>
       </div>
       <div class="days">${days.map((d) => dayCell(d, s.today)).join('')}</div>
       <div class="week-pts">

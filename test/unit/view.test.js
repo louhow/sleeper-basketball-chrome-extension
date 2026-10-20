@@ -63,8 +63,8 @@ test('starters use league slots, with combo slots split by color', () => {
   const html = render(state(), []);
   assert.match(html, /class="slot split pg sg" style="--a:var\(--pg\);--b:var\(--sg\)">G</);
   const out = text(html);
-  assert.match(out, /PG Luka Doncic PG LAL 100% rost · 97% start .* 12\.50 proj 39\.83/);
-  assert.match(out, /G Jeremiah Fears Questionable PG SG NOP 95% rost · 23% start/);
+  assert.match(out, /PG Luka Doncic PG - LAL 100% Rostered \| 97% Start .* 12\.50 proj 39\.83/);
+  assert.match(out, /G Jeremiah Fears PG SG - NOP Questionable 95% Rostered \| 23% Start/);
   assert.match(out, /UTIL Empty/);
 });
 
@@ -77,7 +77,7 @@ test('day strip shows projections before games and actual points after', () => {
 
 test('reserve and taxi pad to the league slot counts; picks credit the original team', () => {
   const out = text(render(state(), []));
-  assert.match(out, /Bench .* Pts BN Bench Guard .* BN Bench Four SF PF FA .* BN Bench Center .* BN Player #c/, 'bench sorted by primary position, unknowns last');
+  assert.match(out, /Bench .* Pts BN Bench Guard .* BN Bench Four SF PF - FA .* BN Bench Center .* BN Player #c/, 'bench sorted by primary position, unknowns last');
   assert.match(out, /Injured Reserve .* Pts IR Hurt Six .* IR Empty/);
   assert.match(out, /Taxi Squad .* Pts TX Empty/);
   assert.match(out, /Draft Picks 2027 1st Rd 2027 2nd Rd via Cling Kong/);

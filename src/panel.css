@@ -472,20 +472,25 @@ button.slot:hover {
 .inj.severe {
   color: var(--danger);
 }
-.line2 {
-  color: var(--muted);
+.line1 .pos,
+.line1 .team {
   font-size: 11px;
+}
+.line2 {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.line2 .pos,
-.line2 .team {
-  font-size: 11px;
+.line2 b {
+  color: var(--text);
+  font-weight: 900;
 }
-.line2 .pct::before {
-  content: "·";
-  margin-right: 4px;
+.line2 .bar {
+  margin: 0 5px;
+  opacity: 0.5;
 }
 .week-pts {
   display: flex;

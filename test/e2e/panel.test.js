@@ -149,6 +149,8 @@ async function answerGraphql(route) {
     sleeper.rostersLoading ??= fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/rosters`)
       .then((res) => res.json())
       .then((rosters) => {
+        // The tests expect full active rosters with empty IR; the live league can move players to IR.
+        for (const r of rosters) r.reserve = [];
         sleeper.rosters = rosters;
         sleeper.rostersLoading = null;
       });
@@ -288,7 +290,7 @@ test('shows starters with a full week of days and real projections', async () =>
   assert.ok(times.some((t) => /^\d{1,2}:\d\d(am|pm)$/.test(t)), 'game times come from the scores query');
   assert.match(await page.locator(panel('.week-label')).textContent(), /Week \d+\s*[A-Z]{3} \d+-/);
   assert.match(await page.locator(panel('.team-card')).textContent(), /proj \d+\.\d\d/);
-  assert.match(await page.locator(panel('.line2')).first().textContent(), /\d+% rost · \d+% start/);
+  assert.match(await page.locator(panel('.line2')).first().textContent(), /\d+% Rostered\s*\|\s*\d+% Start/);
   await page.screenshot({ path: `${OUT}team.png` });
   await page.locator(panel('.body')).evaluate((b) => { b.scrollTop = b.scrollHeight; });
   await page.screenshot({ path: `${OUT}team-bottom.png` });
@@ -690,7 +692,7 @@ test('IR: Out players move onto IR from the bench or the lineup', async () => {
   const myRoster = rosters.find((r) => r.owner_id === sleeper.me);
   await seedLegs(1);
   const starters = sleeper.legs[1].find((l) => l.roster_id === myRoster.roster_id).starters;
-  const benchId = myRoster.players.find((id) => !starters.includes(id) && !(myRoster.taxi || []).includes(id) && !(myRoster.reserve || []).includes(id));
+  const benchId = myRoster.players.find((id) => !starters.includes(id) && !(myRoster.taxi || []).includes(id));
   const starterId = starters[0];
   sleeper.injured = new Set([benchId, starterId]);
 
