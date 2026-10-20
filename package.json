@@ -2,6 +2,7 @@
   "name": "sleeper-nba-panel",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "TZ=America/New_York node --test 'test/unit/*.test.js'",
