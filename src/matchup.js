@@ -121,7 +121,7 @@
     const curValue = cur ? (curDone || cur.actual != null ? cur.actual ?? 0 : cur.proj) : null;
     return `<div class="mp ${cls}${st.locked ? ' is-locked' : ''}">
       <div class="mp-head">
-        <img class="headshot" src="${headshot(id)}" alt="" loading="lazy">
+        <img class="headshot" src="${headshot(id)}" alt="">
         <div class="mp-id">
           <div class="name">${esc(shortName(p))}${injuryTag(p)}</div>
           <div class="sub">${positions(p)} <span class="team">• ${esc(p.team || 'FA')}</span></div>
@@ -174,7 +174,7 @@
       d === st.locked ? 'locked' : '',
     ].filter(Boolean).join(' ');
     const label = `${weekday(d.date)} ${d.home ? 'vs' : '@'} ${d.opponent}`;
-    return `<span class="chip ${cls}" title="${esc(label)}"><img src="${teamLogo(d.opponent)}" alt="${esc(d.opponent)}" loading="lazy"></span>`;
+    return `<span class="chip ${cls}" title="${esc(label)}"><img src="${teamLogo(d.opponent)}" alt="${esc(d.opponent)}"></span>`;
   }
 
   return { render };

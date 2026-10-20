@@ -271,9 +271,53 @@
     return Object.fromEntries(order.map((r, i) => [r.roster_id, i + 1]));
   }
 
+  // Waivers, ported from Sleeper's add/drop dialog. waiver_type 2 is FAAB.
+  const FAAB = 2;
+
+  // Open active-roster spots: one per roster position, and IR and taxi players don't count.
+  function rosterRoom(league, roster) {
+    const r = roster || {};
+    return (league.roster_positions || []).length - (r.players || []).length + (r.reserve || []).length + (r.taxi || []).length;
+  }
+
+  function faabLeft(league, roster) {
+    return Math.max(0, (league.settings?.waiver_budget || 0) - (roster?.settings?.waiver_budget_used || 0));
+  }
+
+  // Why a claim can't be submitted yet, or null. Only dropping an active player
+  // opens a spot, since IR and taxi players don't count toward the roster.
+  function claimError({ league, roster, waiver, bid, drops }) {
+    const settings = league.settings || {};
+    const inactive = new Set([...(roster.reserve || []), ...(roster.taxi || [])]);
+    const room = rosterRoom(league, roster) + drops.filter((id) => !inactive.has(id)).length;
+    if (room <= 0) {
+      const need = 1 - rosterRoom(league, roster);
+      return `You must select ${need} player${need > 1 ? 's' : ''} to drop`;
+    }
+    if (waiver && settings.waiver_type === FAAB) {
+      const min = settings.waiver_bid_min || 0;
+      const left = faabLeft(league, roster);
+      if (bid === '' || bid == null || Number.isNaN(Number(bid))) return 'Invalid bid amount';
+      if (Number(bid) < 0) return 'Bid cannot be negative';
+      if (!Number.isInteger(Number(bid))) return 'Bids are whole dollars';
+      if (Number(bid) < min) return `Bid must be a minimum of $${min}`;
+      if (Number(bid) > left) return `You only have $${left} remaining`;
+    }
+    return null;
+  }
+
+  // Pending claims in the order Sleeper processes them: highest bid, then priority.
+  function sortClaims(claims) {
+    const bid = (c) => c.settings?.waiver_bid ?? 0;
+    const priority = (c) => c.settings?.priority ?? Infinity;
+    return [...claims].sort((a, b) =>
+      bid(b) - bid(a) || priority(a) - priority(b) || String(a.transaction_id).localeCompare(String(b.transaction_id)));
+  }
+
   return {
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen,
     lockedGameId, lockState, winProbability, standingsRanks,
+    FAAB, rosterRoom, faabLeft, claimError, sortClaims,
   };
 })();

@@ -55,7 +55,7 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 test('team card shows record, live points, lock-in projection and opponent', () => {
   const out = text(render(state(), []));
-  assert.match(out, /COOKIE &lt;MONSTER&gt; louhow · 2-1 12\.50 proj 39\.83 vs Cling Kong/);
+  assert.match(out, /COOKIE &lt;MONSTER&gt; louhow · 2-1 · vs Cling Kong 12\.50 proj 39\.83/);
   assert.match(out, /Week 1 OCT 19-25/);
 });
 
@@ -63,22 +63,23 @@ test('starters use league slots, with combo slots split by color', () => {
   const html = render(state(), []);
   assert.match(html, /class="slot split pg sg" style="--a:var\(--pg\);--b:var\(--sg\)">G</);
   const out = text(html);
-  assert.match(out, /PG Luka Doncic PG - LAL 100% Rostered \| 97% Start 12\.50 proj 39\.83/);
-  assert.match(out, /G Jeremiah Fears PG SG - NOP Questionable 95% Rostered \| 23% Start/);
+  assert.match(out, /PG Luka Doncic PG LAL 100% rost · 97% start .* 12\.50 proj 39\.83/);
+  assert.match(out, /G Jeremiah Fears Questionable PG SG NOP 95% rost · 23% start/);
   assert.match(out, /UTIL Empty/);
 });
 
 test('day strip shows projections before games and actual points after', () => {
   const out = text(render(state(), []));
-  assert.match(out, /W 30\.79 vs GSW/);
-  assert.match(out, /S 12\.50 @UTA Final/);
+  assert.match(out, /Starters M 19 T 20 W 21 T 22 F 23 S 24 S 25 Pts/, 'day labels print once per section');
+  assert.match(out, /vs GSW 30\.79 10:00pm/);
+  assert.match(out, /@UTA 12\.50 Final/);
 });
 
 test('reserve and taxi pad to the league slot counts; picks credit the original team', () => {
   const out = text(render(state(), []));
-  assert.match(out, /Bench BN Bench Guard .* BN Bench Four SF PF - FA .* BN Bench Center .* BN Player #c/, 'bench sorted by primary position, unknowns last');
-  assert.match(out, /Injured Reserve IR Hurt Six .* IR Empty/);
-  assert.match(out, /Taxi Squad TX Empty/);
+  assert.match(out, /Bench .* Pts BN Bench Guard .* BN Bench Four SF PF FA .* BN Bench Center .* BN Player #c/, 'bench sorted by primary position, unknowns last');
+  assert.match(out, /Injured Reserve .* Pts IR Hurt Six .* IR Empty/);
+  assert.match(out, /Taxi Squad .* Pts TX Empty/);
   assert.match(out, /Draft Picks 2027 1st Rd 2027 2nd Rd via Cling Kong/);
 });
 
@@ -106,15 +107,15 @@ test('lineup is read-only unless the logged-in user owns the roster', () => {
   assert.match(html, /<button class="slot pg" data-spot="s:0"/);
   assert.match(html, /data-spot="b:d"/, 'bench players are buttons too');
   assert.doesNotMatch(html, /data-spot="[^"]*f"/, 'reserve is not part of the lineup');
-  assert.match(text(html), /Tap on a position button to update your lineup/);
+  assert.match(text(html), /Tap a position to update your lineup/);
   assert.doesNotMatch(render(state({ me: 'u1', currentWeek: 2 }), []), /data-spot=/, 'past weeks are read-only');
 });
 
 test('picking a spot highlights who it can swap with and dims the rest', () => {
   const html = render(state({ me: 'u1', currentWeek: 1, swap: 's:0' }), []);
-  assert.match(html, /<article class="card selected">\s*<div class="top">\s*<button class="slot pg" data-spot="s:0"/);
-  assert.match(html, /<article class="card target">\s*<div class="top">\s*<button class="slot split pg sg"[^>]*data-spot="s:1"/);
-  assert.match(html, /<article class="card dim">\s*<div class="top">\s*<button class="slot bn" data-spot="b:d"/);
+  assert.match(html, /<article class="card selected">\s*<button class="slot pg" data-spot="s:0"/);
+  assert.match(html, /<article class="card target">\s*<button class="slot split pg sg"[^>]*data-spot="s:1"/);
+  assert.match(html, /<article class="card dim">\s*<button class="slot bn" data-spot="b:d"/);
   assert.match(text(html), /Pick a player to swap with Luka Doncic/);
 });
 
@@ -126,7 +127,7 @@ test('logged-in leg data wins: starters, projection and locked games', () => {
   assert.match(out, /4\.00 proj 157\.23/);
   assert.match(out, /PG Jeremiah Fears .* G Luka Doncic/);
   assert.match(html, /class="day game locked"/);
-  assert.match(out, /locked 30\.79/);
+  assert.match(out, /lock 30\.79/);
 });
 
 const taxiState = (overrides = {}) => {
@@ -147,7 +148,7 @@ test('taxi is editable before the deadline, with the league rule spelled out', (
   assert.match(html, /data-spot="te:0"/, 'open taxi slot');
   assert.match(text(html), /Players with 2 or fewer years of experience can move to taxi until the first game of the regular season tips off\./);
   const picking = render(taxiState({ swap: 'b:d' }), []);
-  assert.match(picking, /<article class="card target">\s*<div class="top">\s*<button class="slot tx" data-spot="t:t1"/);
+  assert.match(picking, /<article class="card target">\s*<button class="slot tx" data-spot="t:t1"/);
 });
 
 test('taxi locks once the regular season tips off', () => {
@@ -155,7 +156,7 @@ test('taxi locks once the regular season tips off', () => {
   const out = text(render(s, []));
   assert.match(out, /Taxi is locked for the season: players can only move up to the active roster \(roster is full\)\./);
   const picking = render({ ...s, swap: 'b:d' }, []);
-  assert.doesNotMatch(picking, /class="card target">\s*<div class="top">\s*<button class="slot tx"/, 'no moves onto taxi');
+  assert.doesNotMatch(picking, /class="card target">\s*<button class="slot tx"/, 'no moves onto taxi');
   assert.doesNotMatch(render(s, []), /data-spot="t:/, 'no dead buttons: a full roster leaves taxi players nowhere to go');
 });
 

@@ -139,6 +139,6 @@
 
   return {
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
-    gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule,
+    gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, owns,
   };
 })();

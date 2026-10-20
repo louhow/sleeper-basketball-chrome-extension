@@ -34,6 +34,20 @@ The projection follows Lock-In rules: an unlocked player scores their final game
 Win probability is Sleeper's own formula, ported from its web app: each side is a normal distribution centred on its projection, narrowing as the score approaches it.
 Rank comes from `roster_standings`; before any games are played, it falls back to the standings order (record, points, then waiver order), which is what Sleeper shows then.
 
+### Waivers
+
+Sleeper's web Players tab lists NBA players with their waiver (W) or ADD buttons, but answers every click with "Player Actions not yet available on web for NBA fantasy".
+The extension takes over those two buttons and opens the same dialog Sleeper's web app uses for NFL:
+
+- Waiver players get "Make Waiver Bid" with the FAAB budget left (or "Make Waiver Claim" without FAAB); free agents get "Add Player", which adds right away.
+- When the roster is full, a drop is required; only dropping an active player opens a spot, and IR players are left out of the list, as in Sleeper's dialog.
+- Bids must be whole dollars, at least `waiver_bid_min` and at most the budget left.
+- The Team tab's Waivers button lists pending claims in processing order (bid, then priority), where a bid can be changed or the claim canceled.
+
+How it hooks in: `src/page-hook.js` runs in the page's own world, because only there can it read the button's React props (`playerId` and Sleeper's computed `waiverStatus`).
+It only acts on pages of a league the extension has confirmed is NBA, and hands the click to the extension as a DOM event, so Sleeper's own handler never runs.
+Which players are on waivers, and until when, is Sleeper's own calculation; the extension doesn't recompute it.
+
 ## Logged-in features
 
 When the page has a Sleeper session, the extension reads its token from `localStorage.token` and sends it as the `Authorization` header, the same way Sleeper's web app does.
@@ -46,6 +60,10 @@ It enables:
 - `update_matchup_leg(...)` during the season, `roster_update_starters(...)` outside it: saving a swap.
 - `update_matchup_leg(..., starters_games: $starters_games)`: Lock-In. The variable is the week's full player -> game map as JSON, with the new lock added.
 - `roster_update_taxi(league_id, roster_id, taxi)`: taxi moves. Saved before any starter change, like Sleeper's web app.
+- `submit_waiver_claim(league_id, k_adds, v_adds, k_drops, v_drops, k_settings: ["waiver_bid"], v_settings: [bid])`: a waiver claim, as Sleeper's web app sends it for NFL. Adds and drops map player ids to the roster id.
+- `league_create_transaction(league_id, type: "free_agent", k_adds, v_adds, k_drops, v_drops)`: a free-agent add.
+- `league_transactions_filtered(league_id, roster_id_filters, type_filters: ["waiver"], status_filters: ["pending"])`: pending claims.
+- `update_waiver_claim(league_id, transaction_id, leg, k_settings, v_settings)` and `cancel_waiver_claim(league_id, leg, transaction_id)`: changing a bid and canceling a claim.
 
 ## API calls
 
@@ -64,6 +82,7 @@ It enables:
 | `POST sleeper.com/graphql` `scores(...)` | Game times and home/away |
 | `POST sleeper.com/graphql` `roster_standings(...)` | Standings rank |
 | `POST sleeper.com/graphql` `me`, `matchup_legs`, `update_matchup_leg`, `roster_update_starters`, `roster_update_taxi` | Logged-in lineup data, swaps, Lock-In and taxi (see above) |
+| `POST sleeper.com/graphql` `submit_waiver_claim`, `league_create_transaction`, `league_transactions_filtered`, `update_waiver_claim`, `cancel_waiver_claim` | Waiver bids, free-agent adds and pending claims (see above) |
 
 ## Tests
 
@@ -74,6 +93,7 @@ npm run test:e2e  # headless Chromium with the extension loaded
 ```
 
 Logged-out visitors get redirected away from league pages, so the e2e test serves a stand-in page that mirrors the empty Team tab's markup, and keeps public API calls live.
-Authenticated GraphQL calls are answered by a mock in the test, so tests never change a real lineup.
+Authenticated GraphQL calls are answered by a mock in the test, so tests never change a real lineup or place a real bid.
+The waiver tests use a stand-in Players tab whose W and ADD buttons carry React-style props, plus a document listener standing in for Sleeper's own handler, which must never fire.
 The Lock-In test fakes a mid-week state (each team's first game finished, projections standing in for stats), since nothing is lockable before games are played.
 Screenshots land in `test-results/`.

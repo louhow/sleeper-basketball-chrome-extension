@@ -1,9 +1,12 @@
 // Fills Sleeper's empty NBA Team and Matchup tabs (sleeper.com/leagues/<id>/team
 // and /matchup) with rosters, schedules, projections, lineup swaps and Lock-In.
 // Falls back to a floating panel when the page has no placeholder to fill.
+// On every page of an NBA league it also answers Sleeper's waiver and add
+// buttons (see page-hook.js) with a bid dialog.
 (() => {
-  const { createApi, view, model, scoring, ui } = globalThis.SNP;
-  const ROUTE = /^\/leagues\/(\d+)\/(team|matchup)\/?$/;
+  const { createApi, view, model, scoring, ui, waivers } = globalThis.SNP;
+  const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
+  const PANEL_PAGES = new Set(['team', 'matchup']);
   const PLAYERS_PATH = '/v1/players/nba';
   const PLAYERS_KEY = 'players:nba:v4';
   const PLAYERS_TTL_MS = 12 * 3600e3;
@@ -12,6 +15,7 @@
   const FLOAT_AFTER_MS = 4000;
   const NOTICE_MS = 3000;
   const CLOCK_MS = 60e3;
+  const TRANSACTION_FIELDS = 'adds drops leg roster_ids settings status transaction_id type created creator';
 
   // The stylesheet is inlined into each shadow root, so nothing ever paints unstyled.
   const stylesheet = fetch(chrome.runtime.getURL('src/panel.css')).then((r) => r.text());
@@ -22,6 +26,7 @@
   // Polling also re-attaches the panel if React re-renders the tab.
   function sync() {
     const [, leagueId = null, page = null] = location.pathname.match(ROUTE) ?? [];
+    // One session per league, kept across its tabs; the panel only shows on Team and Matchup.
     if (leagueId !== (active?.leagueId ?? null)) {
       active?.destroy();
       active = leagueId ? mount(leagueId, page) : null;
@@ -36,18 +41,26 @@
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = '<style></style><div class="root"></div>';
     const root = shadow.querySelector('.root');
+    // Dialogs and Players-tab notices live in their own host over the whole page.
+    const layer = document.createElement('div');
+    layer.id = 'sleeper-nba-dialog';
+    const layerShadow = layer.attachShadow({ mode: 'open' });
+    layerShadow.innerHTML = '<style></style><div class="root"></div>';
+    const layerRoot = layerShadow.querySelector('.root');
     let styled = false;
     stylesheet.then((css) => {
       shadow.querySelector('style').textContent = css;
+      layerShadow.querySelector('style').textContent = css;
       styled = true;
       schedule();
     });
-    const mountedAt = Date.now();
+    let mountedAt = Date.now();
     let hidden = null; // Sleeper's placeholder, hidden while we fill its spot
 
     const state = {
       leagueId,
-      page, // 'team' | 'matchup', from the URL
+      page: PANEL_PAGES.has(page) ? page : 'team', // panel view: 'team' | 'matchup'
+      onPanel: PANEL_PAGES.has(page), // whether the URL is a tab the panel fills
       tab: 'page', // 'page' | 'api'
       now: Date.now(),
       error: null,
@@ -70,6 +83,8 @@
       notice: null, // { kind: 'error' | 'ok', text }
       lockConfirm: null, // player id whose Lock-In is awaiting confirmation
       ready: false, // first league + week load finished; the panel stays blank until then
+      claims: null, // the logged-in owner's pending waiver claims
+      modal: null, // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving }
     };
     let destroyed = false;
     let disabled = false;
@@ -78,6 +93,7 @@
 
     function attach() {
       if (destroyed || disabled) return;
+      if (!state.onPanel) return detach();
       const placeholder = document.querySelector('.postdraft-panel .empty-panel-container');
       const panel = placeholder?.closest('.postdraft-panel');
       if (panel) {
@@ -102,18 +118,43 @@
       hidden = null;
     }
 
+    function detach() {
+      host.remove();
+      restorePlaceholder();
+      mountedAt = Date.now();
+    }
+
     function schedule() {
       if (frame || destroyed) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        // Blank until everything for the first paint is in, like Sleeper's own tabs.
-        if (destroyed || !styled || !(state.ready || state.error)) return;
-        const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
+        if (destroyed || !styled) return;
         state.now = Date.now();
+        renderLayer();
+        // Blank until everything for the first paint is in, like Sleeper's own tabs.
+        if (!(state.ready || state.error)) return;
+        const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
         root.innerHTML = view.render(state, api.log);
         const body = root.querySelector('.body');
         if (body) body.scrollTop = scrollTop;
       });
+    }
+
+    // The open dialog, plus save notices when there's no panel (or it's covered by the dialog).
+    function renderLayer() {
+      const showNotice = Boolean(state.notice) && (!state.onPanel || state.modal);
+      if (!state.modal && !showNotice) return layer.remove();
+      if (!layer.isConnected) document.documentElement.appendChild(layer);
+      const scrollTop = layerRoot.querySelector('.dialog-body')?.scrollTop ?? 0;
+      const focused = layerShadow.activeElement?.matches?.('[data-bid]');
+      layerRoot.innerHTML = `<div class="page-layer">${waivers.render(state)}${showNotice ? ui.notice(state) : ''}</div>`;
+      const body = layerRoot.querySelector('.dialog-body');
+      if (body) body.scrollTop = scrollTop;
+      const input = layerRoot.querySelector('[data-bid]');
+      if (input && (focused || state.modal.focus)) {
+        input.focus();
+        state.modal.focus = false;
+      }
     }
 
     function fail(err) {
@@ -158,6 +199,8 @@
         teardown();
         return;
       }
+      // Tells page-hook.js to route this league's waiver and add buttons here.
+      document.documentElement.dataset.snpNbaLeague = leagueId;
       const rosterKey = `roster:${leagueId}`;
       const [nbaState, users, rosters, bracket, traded, drafts, players, prefs, me] = await Promise.all([
         api.get('/v1/state/nba'),
@@ -190,7 +233,27 @@
       state.seasonType = nbaState.season_type;
       if (state.week == null) state.week = state.currentWeek;
       await loadWeek(state.week);
+      if (state.currentWeek !== state.week) loadWeek(state.currentWeek).catch(fail);
       state.ready = true;
+      schedule();
+      loadClaims();
+    }
+
+    // The logged-in owner's pending waiver claims, as Sleeper's waiver list loads them.
+    async function loadClaims() {
+      const roster = waivers.myRoster(state);
+      if (!roster || !api.loggedIn()) return;
+      try {
+        const data = await api.graphql('league_transactions_filtered (pending waivers)', `query league_transactions_filtered {
+  league_transactions_filtered(league_id: ${JSON.stringify(leagueId)}, roster_id_filters: [${Number(roster.roster_id)}], type_filters: ["waiver"], leg_filters: [], status_filters: ["pending"]) {
+    ${TRANSACTION_FIELDS}
+  }
+}`, { auth: true });
+        state.claims = data?.league_transactions_filtered ?? [];
+      } catch (err) {
+        console.warn('[sleeper-nba-panel] pending waivers unavailable', err);
+        state.claims ??= [];
+      }
       schedule();
     }
 
@@ -333,13 +396,7 @@
       schedule();
       try {
         await work();
-        const notice = { kind: 'ok', text: okText };
-        state.notice = notice;
-        setTimeout(() => {
-          if (state.notice !== notice) return;
-          state.notice = null;
-          schedule();
-        }, NOTICE_MS);
+        flash(okText);
       } catch (err) {
         console.error('[sleeper-nba-panel] save failed', err);
         state.notice = { kind: 'error', text: `${failText}: ${err.message || err}` };
@@ -347,6 +404,138 @@
         state.saving = false;
         schedule();
       }
+    }
+
+    function flash(text) {
+      const notice = { kind: 'ok', text };
+      state.notice = notice;
+      setTimeout(() => {
+        if (state.notice !== notice) return;
+        state.notice = null;
+        schedule();
+      }, NOTICE_MS);
+    }
+
+    // Opens Sleeper's add or waiver-bid dialog for a player (from page-hook.js).
+    function openClaim({ playerId, status }) {
+      state.modal = { kind: 'bid', playerId, status, bid: '', drops: [], errors: [], saving: false, focus: true };
+      state.notice = null;
+      schedule();
+    }
+
+    function openClaims() {
+      state.modal = { kind: 'claims', errors: [], saving: false };
+      state.notice = null;
+      schedule();
+      loadClaims();
+    }
+
+    function closeModal() {
+      if (state.modal?.saving) return;
+      state.modal = null;
+      schedule();
+    }
+
+    // Runs a dialog's save; errors stay in the dialog, success closes it (or keeps the claims list open).
+    async function modalSave(work, okText) {
+      const m = state.modal;
+      if (!m || m.saving) return;
+      m.saving = true;
+      m.errors = [];
+      schedule();
+      try {
+        await work();
+        if (state.modal === m) state.modal = m.kind === 'claims' ? { ...m, saving: false } : null;
+        flash(okText);
+      } catch (err) {
+        console.error('[sleeper-nba-panel] waiver save failed', err);
+        m.errors = [String(err.message || err)];
+      } finally {
+        m.saving = false;
+        schedule();
+      }
+    }
+
+    // Submits the open dialog: a waiver claim (with a FAAB bid) or a free-agent add, plus drops.
+    function submitClaim() {
+      const m = state.modal;
+      const roster = waivers.myRoster(state);
+      if (m?.kind !== 'bid' || m.saving || !roster || !state.ready) return;
+      const waiver = m.status === 'waiver';
+      const error = model.claimError({ league: state.league, roster, waiver, bid: m.bid, drops: m.drops });
+      if (error) {
+        m.errors = [error];
+        return schedule();
+      }
+      const rid = Number(roster.roster_id);
+      const variables = { k_adds: [m.playerId], v_adds: [rid], k_drops: m.drops, v_drops: m.drops.map(() => rid) };
+      const bid = waiver && state.league.settings?.waiver_type === model.FAAB;
+      if (bid) Object.assign(variables, { k_settings: ['waiver_bid'], v_settings: [Number(m.bid)] });
+      const name = (id) => state.players[id]?.name || `Player #${id}`;
+      const dropping = m.drops.length ? ` (dropping ${m.drops.map(name).join(', ')})` : '';
+      const league = JSON.stringify(leagueId);
+      const lists = '$k_adds: [String], $v_adds: [Int], $k_drops: [String], $v_drops: [Int]';
+      const args = 'k_adds: $k_adds, v_adds: $v_adds, k_drops: $k_drops, v_drops: $v_drops';
+      return modalSave(async () => {
+        if (waiver) {
+          await api.graphql('submit_waiver_claim', `mutation submit_waiver_claim(${lists}${bid ? ', $k_settings: [String], $v_settings: [Int]' : ''}) {
+  submit_waiver_claim(league_id: ${league}, ${args}${bid ? ', k_settings: $k_settings, v_settings: $v_settings' : ''}) {
+    ${TRANSACTION_FIELDS}
+  }
+}`, { auth: true, variables });
+          await loadClaims();
+        } else {
+          await api.graphql('league_create_transaction', `mutation league_create_transaction(${lists}) {
+  league_create_transaction(league_id: ${league}, type: "free_agent", ${args}) {
+    ${TRANSACTION_FIELDS}
+  }
+}`, { auth: true, variables });
+          state.rosters = await loadRosters();
+        }
+      }, waiver
+        ? `${bid ? `$${Number(m.bid)} bid` : 'Claim'} placed for ${name(m.playerId)}${dropping}`
+        : `Added ${name(m.playerId)}${dropping}`);
+    }
+
+    function claimById(id) {
+      return state.claims?.find((c) => c.transaction_id === id);
+    }
+
+    function updateClaimBid(id, value) {
+      const claim = claimById(id);
+      const roster = waivers.myRoster(state);
+      if (!claim || !roster) return;
+      // Validate like a new bid; the claim's own add needs no extra roster room.
+      const error = model.claimError({ league: state.league, roster: { ...roster, players: [] }, waiver: true, bid: value, drops: [] });
+      if (error) {
+        state.modal.errors = [error];
+        return schedule();
+      }
+      const settings = { ...claim.settings, waiver_bid: Number(value) };
+      const variables = { k_settings: Object.keys(settings), v_settings: Object.values(settings).map(Number) };
+      const name = state.players[Object.keys(claim.adds || {})[0]]?.name || 'claim';
+      return modalSave(async () => {
+        await api.graphql('update_waiver_claim', `mutation update_waiver_claim($k_settings: [String], $v_settings: [Int]) {
+  update_waiver_claim(league_id: ${JSON.stringify(leagueId)}, transaction_id: ${JSON.stringify(id)}, leg: ${Number(claim.leg)}, k_settings: $k_settings, v_settings: $v_settings) {
+    ${TRANSACTION_FIELDS}
+  }
+}`, { auth: true, variables });
+        await loadClaims();
+      }, `Bid for ${name} is now $${Number(value)}`);
+    }
+
+    function cancelClaim(id) {
+      const claim = claimById(id);
+      if (!claim) return;
+      const name = state.players[Object.keys(claim.adds || {})[0]]?.name || 'claim';
+      return modalSave(async () => {
+        await api.graphql('cancel_waiver_claim', `mutation cancel_waiver_claim {
+  cancel_waiver_claim(league_id: ${JSON.stringify(leagueId)}, leg: ${Number(claim.leg)}, transaction_id: ${JSON.stringify(id)}) {
+    ${TRANSACTION_FIELDS}
+  }
+}`, { auth: true });
+        await loadClaims();
+      }, `Canceled the claim for ${name}`);
     }
 
     async function saveTaxi(rosterId, taxi) {
@@ -444,6 +633,7 @@
       if (action === 'prev' && state.week > state.minWeek) setWeek(state.week - 1);
       if (action === 'next' && state.week < state.maxWeek) setWeek(state.week + 1);
       if (action === 'refresh') loadLeague(true).catch(fail);
+      if (action === 'claims') openClaims();
     });
     root.addEventListener('change', (e) => {
       if (e.target.dataset.action !== 'roster') return;
@@ -469,7 +659,48 @@
       if (e.target.tagName === 'IMG') e.target.classList.add('missing');
     }, true);
 
+    layerRoot.addEventListener('click', (e) => {
+      const drop = e.target.closest('[data-drop]');
+      if (drop && state.modal?.kind === 'bid' && !state.modal.saving) {
+        const id = drop.dataset.drop;
+        const drops = state.modal.drops;
+        state.modal.drops = drops.includes(id) ? drops.filter((d) => d !== id) : [...drops, id];
+        state.modal.errors = [];
+        return schedule();
+      }
+      const save = e.target.closest('[data-claim-save]');
+      if (save) {
+        const id = save.dataset.claimSave;
+        const input = layerRoot.querySelector(`[data-claim-bid="${CSS.escape(id)}"]`);
+        return updateClaimBid(id, input?.value ?? '');
+      }
+      const cancel = e.target.closest('[data-claim-cancel]');
+      if (cancel) return cancelClaim(cancel.dataset.claimCancel);
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'close-modal') closeModal();
+      if (action === 'submit-claim') submitClaim();
+    });
+    layerRoot.addEventListener('input', (e) => {
+      // Kept without a re-render so typing never loses focus.
+      if (e.target.matches('[data-bid]') && state.modal) state.modal.bid = e.target.value;
+    });
+    layerRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.matches('[data-bid]')) submitClaim();
+    });
+    layerRoot.addEventListener('error', (e) => {
+      if (e.target.tagName === 'IMG') e.target.classList.add('missing');
+    }, true);
+    function onPlayerAction(e) {
+      try {
+        openClaim(JSON.parse(e.detail));
+      } catch (err) {
+        console.error('[sleeper-nba-panel] bad player action', err);
+      }
+    }
+    document.addEventListener('snp:player-action', onPlayerAction);
+
     function onKey(e) {
+      if (e.key === 'Escape' && state.modal) return closeModal();
       if (e.key === 'Escape' && (state.swap || state.lockConfirm)) {
         state.swap = null;
         state.lockConfirm = null;
@@ -482,8 +713,10 @@
 
     // Same league, other tab (Team <-> Matchup): keep the data, swap the view.
     function show(next) {
-      if (!next || next === state.page) return;
-      state.page = next;
+      const onPanel = PANEL_PAGES.has(next);
+      if (onPanel === state.onPanel && (!onPanel || next === state.page)) return;
+      state.onPanel = onPanel;
+      if (onPanel) state.page = next;
       state.swap = null;
       state.lockConfirm = null;
       state.notice = null;
@@ -493,8 +726,11 @@
     function teardown() {
       clearInterval(clock);
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('snp:player-action', onPlayerAction);
+      if (document.documentElement.dataset.snpNbaLeague === leagueId) delete document.documentElement.dataset.snpNbaLeague;
       cancelAnimationFrame(frame);
       host.remove();
+      layer.remove();
       restorePlaceholder();
     }
 

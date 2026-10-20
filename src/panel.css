@@ -137,14 +137,14 @@ pre.error {
   font-size: 12px;
 }
 
-/* Team summary */
+/* Team summary: one row with the score, waivers and the week picker. */
 .team-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 8px 12px;
   border: 1px solid rgba(120, 140, 255, 0.35);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(135deg, rgba(40, 52, 96, 0.6), rgba(13, 20, 33, 0.6));
 }
 .avatar {
@@ -154,6 +154,10 @@ pre.error {
   border-radius: 50%;
   object-fit: cover;
   background: rgba(255, 255, 255, 0.08);
+}
+.team-card .avatar {
+  width: 36px;
+  height: 36px;
 }
 .who {
   flex: 1;
@@ -167,13 +171,35 @@ pre.error {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.team-card .team-name {
+  font-size: 16px;
+}
+.team-card .sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .score {
+  flex: none;
   text-align: right;
 }
 .score .pts {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 900;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
+}
+button.waivers {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+button.waivers .count {
+  margin-left: 2px;
+  background: var(--accent);
+  color: #0d1421;
 }
 
 h3 {
@@ -191,42 +217,99 @@ h3 {
   margin: 0;
 }
 .week-nav {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 .week-label {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 84px;
+  min-width: 76px;
   color: var(--accent);
   line-height: 1.15;
 }
 .week-label b {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
 }
 .week-label span {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
-/* Player cards */
+/* Roster rows: badge, headshot, player, the week's seven days, points. Section
+   headers use the same grid so the day labels sit over their columns. */
+.body {
+  container-type: inline-size;
+}
+.card,
+.rhead {
+  --day: 50px;
+  display: grid;
+  grid-template-columns: 40px 30px minmax(0, 1fr) auto 62px;
+  align-items: center;
+  column-gap: 8px;
+}
+.rhead {
+  margin: 14px 0 4px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rtitle {
+  grid-column: 1 / 4;
+  min-width: 0;
+}
+.rhead h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.rhead .hint {
+  margin-top: 0;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.rhead .days {
+  align-self: end;
+}
+.dh {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dh b {
+  margin-right: 3px;
+  color: var(--text);
+}
+.dh.today,
+.dh.today b {
+  color: var(--accent);
+}
+.rhead .week-pts {
+  align-self: end;
+}
+
 .card {
-  margin-bottom: 10px;
-  padding: 12px 12px 10px;
+  margin-bottom: 3px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--card);
 }
-.card.empty {
-  padding-bottom: 12px;
-}
-.card .top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.card .slot {
+  width: 40px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 .slot {
   flex: none;
@@ -335,6 +418,13 @@ button.slot:hover {
   object-fit: cover;
   background: rgba(255, 255, 255, 0.06);
 }
+.card .headshot {
+  width: 30px;
+  height: 30px;
+}
+.card.empty .headshot {
+  background: none;
+}
 .headshot.missing {
   visibility: hidden;
 }
@@ -354,8 +444,7 @@ button.slot:hover {
   overflow: hidden;
 }
 .line1 .name {
-  margin-right: 2px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -384,106 +473,118 @@ button.slot:hover {
   color: var(--danger);
 }
 .line2 {
-  margin-top: 2px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.line2 b {
-  color: var(--text);
+.line2 .pos,
+.line2 .team {
+  font-size: 11px;
 }
-.line2 .bar {
-  margin: 0 4px;
-  opacity: 0.5;
+.line2 .pct::before {
+  content: "·";
+  margin-right: 4px;
 }
 .week-pts {
-  flex: none;
-  text-align: right;
-  font-size: 15px;
-  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   font-variant-numeric: tabular-nums;
+}
+.week-pts b {
+  font-size: 14px;
+}
+.week-pts span {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .days {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  margin-top: 10px;
+  grid-template-columns: repeat(7, var(--day));
+  gap: 3px;
 }
 .day {
   position: relative;
-  padding-bottom: 16px;
+  min-width: 0;
 }
 .cell {
-  position: relative;
-  height: 40px;
+  height: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--cell);
+  line-height: 12px;
+  white-space: nowrap;
 }
 .day.game .cell {
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.07);
 }
 .day.done .cell {
   border-color: rgba(0, 206, 184, 0.5);
+}
+.day.today .cell {
+  background: rgba(0, 206, 184, 0.08);
+}
+.day.today.game .cell {
+  background: rgba(0, 206, 184, 0.14);
 }
 .day.locked .cell {
   border-color: var(--warn);
   background: rgba(248, 210, 75, 0.12);
 }
 .lock {
-  font-size: 9px;
-}
-.cell .d {
   position: absolute;
-  top: 3px;
-  left: 6px;
-  color: var(--muted);
-  font-size: 11px;
+  top: -5px;
+  right: -3px;
+  font-size: 9px;
+  line-height: 1;
+}
+.cell .o {
+  font-size: 10.5px;
   font-weight: 700;
 }
 .cell .v {
-  position: absolute;
-  top: 3px;
-  right: 6px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
-.cell .o {
-  position: absolute;
-  right: 6px;
-  bottom: 3px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.time {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+.cell .time {
   color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
-.day.today::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 4px;
-  width: 5px;
-  height: 5px;
-  margin-left: -2.5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-.day.today.game::after {
-  display: none;
+  font-size: 9.5px;
 }
 .day.today .time {
   color: var(--accent);
 }
 
+/* Narrow panels: the week drops under the player. */
+@container (max-width: 600px) {
+  .card,
+  .rhead {
+    --day: minmax(0, 1fr);
+    grid-template-columns: 40px 30px minmax(0, 1fr) 62px;
+    row-gap: 4px;
+  }
+  .card .days,
+  .rhead .days {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .rhead .days {
+    order: 1;
+  }
+}
+
 ul.picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -491,9 +592,15 @@ ul.picks {
 .picks li {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--line);
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 13px;
+}
+.picks .sub {
+  font-size: 11px;
 }
 .picks b {
   font-weight: 700;
@@ -865,4 +972,281 @@ button.lk.cancel {
 .chip.locked {
   opacity: 1;
   box-shadow: 0 0 0 2px var(--warn);
+}
+
+/* Dialogs (waiver bids, claims) in their own host over the whole page, styled
+   after Sleeper's NFL "Make Waiver Bid" dialog. */
+.page-layer .notice {
+  position: fixed;
+  bottom: 32px;
+  z-index: 2147483001;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 20, 0.55);
+}
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+  border-radius: 12px;
+  background: #222a39;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+.dialog-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+.dialog-head .close {
+  background: transparent;
+  color: var(--muted);
+}
+.dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px 12px;
+}
+.dialog-errors {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 91, 110, 0.14);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+.dialog-errors p {
+  margin: 0;
+}
+.banner {
+  margin: 10px 0 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #f5d547;
+  color: #3a3418;
+  font-size: 13px;
+  font-weight: 700;
+}
+.bid-form {
+  display: block;
+  padding: 12px 4px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.bid-form .label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.bid-form .label .sub {
+  font-size: 11px;
+}
+.bid-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.bid-input input {
+  width: 96px;
+  padding: 6px 8px;
+  border: 2px solid #3f6fd8;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+}
+.bid-input input::-webkit-outer-spin-button,
+.bid-input input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.bid-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.dp-head,
+.dp-row {
+  display: grid;
+  grid-template-columns: 44px 30px minmax(0, 1fr) 52px 36px;
+  align-items: center;
+  column-gap: 10px;
+}
+.dp-head {
+  padding: 12px 12px 6px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.dp-head span:nth-child(2) {
+  grid-column: 2 / 4;
+}
+.dp-row {
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.dp-row.adding {
+  border-radius: 10px;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+button.dp-row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+button.dp-row.selected,
+button.dp-row.selected:hover {
+  border: 1px solid #e0b64a;
+  border-radius: 10px;
+  background: rgba(10, 14, 22, 0.55);
+}
+.dp-row .slot {
+  width: 44px;
+  height: 30px;
+  font-size: 12px;
+}
+.dp-row .headshot {
+  width: 30px;
+  height: 30px;
+}
+.dp-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dp-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.dp-name b {
+  margin-right: 2px;
+  font-size: 14px;
+}
+.dp-info .sub {
+  font-size: 11px;
+}
+.dp-pts,
+.dp-gms {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dp-row .dp-pts {
+  font-weight: 700;
+}
+.dialog-foot {
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+button.primary {
+  min-width: 240px;
+  padding: 12px 20px;
+  background: #5ac8b4;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+button.primary:hover:not(:disabled) {
+  background: #4bb6a3;
+}
+button.danger {
+  color: var(--danger);
+}
+ol.claims {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.claim {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.claim .rank {
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
+}
+.claim-players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 12px;
+}
+.cp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cp b {
+  font-size: 13px;
+}
+.cp .headshot {
+  width: 26px;
+  height: 26px;
+}
+.cp .sign {
+  width: 10px;
+  font-size: 16px;
+  font-weight: 900;
+}
+.cp.add .sign {
+  color: var(--accent);
+}
+.cp.drop .sign {
+  color: var(--danger);
+}
+.claim-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.claim-actions .bid-input input {
+  width: 56px;
 }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sleeper NBA",
   "version": "1.0.0",
-  "description": "Fills Sleeper's empty NBA Team and Matchup tabs: roster, schedule, projections, lineup swaps and Lock-In, plus a log of every API call it makes.",
+  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes.",
   "permissions": [
     "storage"
   ],
@@ -21,9 +21,20 @@
         "src/ui.js",
         "src/view.js",
         "src/matchup.js",
+        "src/waivers.js",
         "src/content.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://sleeper.com/*"
+      ],
+      "js": [
+        "src/page-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "web_accessible_resources": [

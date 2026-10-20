@@ -11,7 +11,8 @@
       : state.page === 'matchup' ? globalThis.SNP.matchup.render(state)
       : teamView(state);
     // The notice floats over the panel so showing or clearing it never shifts the cards being clicked.
-    return `<div class="app">${toolbar(state, log)}<div class="body">${body}</div>${state.tab === 'api' ? '' : notice(state)}</div>`;
+    // While a dialog is open it shows over the dialog instead.
+    return `<div class="app">${toolbar(state, log)}<div class="body">${body}</div>${state.tab === 'api' || state.modal ? '' : notice(state)}</div>`;
   }
 
   function toolbar(s, log) {
@@ -33,7 +34,7 @@
     if (s.error) return `<p class="msg error">${esc(s.error)}</p>`;
     const l = lineup(s);
     if (!l) return '<p class="msg">Loading…</p>';
-    const { roster, week, leg, matchup, starters, editable } = l;
+    const { week, matchup, starters, editable } = l;
     const targets = new Set(editable && s.swap ? swapTargets(s.swap, l) : []);
     // Only spots with somewhere to go get a button, so nothing is a dead click.
     const movable = new Set(editable ? spotRefs(l).filter((ref) => swapTargets(ref, l).length) : []);
@@ -49,24 +50,30 @@
     };
 
     const picked = s.swap && s.players[spotId(s.swap, starters)];
+    const hint = editable ? (s.saving ? 'Saving lineup…'
+      : picked ? `Pick a player to swap with ${esc(picked.name)} · Esc to cancel`
+      : s.swap ? 'Pick a player for this slot · Esc to cancel'
+      : 'Tap a position to update your lineup') : '';
 
     return `
-      ${teamCard(s, roster, week, matchup, leg, starters)}
-      <div class="section-head">
-        <div>
-          <h3>Starters</h3>
-          ${editable ? `<div class="hint">${s.saving ? 'Saving lineup…'
-            : picked ? `Pick a player to swap with ${esc(picked.name)} · Esc to cancel`
-            : s.swap ? 'Pick a player for this slot · Esc to cancel'
-            : 'Tap on a position button to update your lineup'}</div>` : ''}
-        </div>
-        ${weekNav(s, week)}
-      </div>
-      ${week ? rosterSections(ctx, l) : '<p class="msg">Loading week…</p>'}`;
+      ${teamCard(s, l)}
+      ${week ? rosterSections(ctx, l, hint) : '<p class="msg">Loading week…</p>'}`;
+  }
+
+  // A section's header row, aligned with its player rows: title, the week's days, points.
+  function sectionHead(ctx, title, hint = '', cls = '') {
+    const { s, week } = ctx;
+    const days = week.days.map((date) => `<div class="dh${date === s.today ? ' today' : ''}">
+      <b>${esc(weekday(date, 'narrow'))}</b>${Number(date.slice(8))}</div>`).join('');
+    return `<div class="rhead${cls ? ` ${cls}` : ''}">
+      <div class="rtitle"><h3>${esc(title)}</h3>${hint ? `<div class="hint">${hint}</div>` : ''}</div>
+      <div class="days">${days}</div>
+      <div class="week-pts">Pts</div>
+    </div>`;
   }
 
   // Every player card needs the week's schedule, so these only render once it's loaded.
-  function rosterSections(ctx, l) {
+  function rosterSections(ctx, l, hint) {
     const { s } = ctx;
     const { slots, starters, bench, taxi, reserve, taxiEditable } = l;
     const settings = s.league.settings || {};
@@ -78,11 +85,11 @@
       : padded(taxi, settings.taxi_slots).map((id) => card('TX', id)).join('');
     const benchCards = bench.map((id) => card('BN', id, `b:${id}`)).join('') + (taxiEditable ? openSpots('be', l.benchRoom, 'BN') : '');
     return `
+      ${sectionHead(ctx, 'Starters', hint)}
       ${starters.map((id, i) => card(slots[i] ?? 'UTIL', id, `s:${i}`)).join('')}
-      ${benchCards ? `<h3>Bench</h3>${benchCards}` : ''}
-      ${reserve.length || settings.reserve_slots ? `<h3>Injured Reserve</h3>${padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('')}` : ''}
-      ${taxi.length || settings.taxi_slots ? `<div class="section-head taxi-head"><div><h3>Taxi Squad</h3>
-        ${taxiEditable ? `<div class="hint">${esc(taxiRule(l))}</div>` : ''}</div></div>${taxiCards}` : ''}
+      ${benchCards ? `${sectionHead(ctx, 'Bench')}${benchCards}` : ''}
+      ${reserve.length || settings.reserve_slots ? `${sectionHead(ctx, 'Injured Reserve')}${padded(reserve, settings.reserve_slots).map((id) => card('IR', id)).join('')}` : ''}
+      ${taxi.length || settings.taxi_slots ? `${sectionHead(ctx, 'Taxi Squad', taxiEditable ? esc(taxiRule(l)) : '', 'taxi-head')}${taxiCards}` : ''}
       ${picksView(s)}`;
   }
 
@@ -93,7 +100,8 @@
     return kind === 'b' || kind === 't' ? key : null;
   }
 
-  function teamCard(s, roster, week, matchup, leg, starters) {
+  function teamCard(s, l) {
+    const { roster, week, matchup, leg, starters } = l;
     const owner = s.usersById?.[roster.owner_id];
     const image = avatar(s, roster);
     const proj = leg?.proj_points ??
@@ -103,17 +111,19 @@
       week.matchups.find((m) => m.matchup_id === matchup.matchup_id && m.roster_id !== roster.roster_id);
     const oppRoster = opp && s.rosters.find((r) => r.roster_id === opp.roster_id);
     const name = teamName(s, roster);
+    const claims = s.claims?.length || 0;
     return `<section class="team-card">
       ${image ? `<img class="avatar" src="${esc(image)}" alt="">` : '<div class="avatar"></div>'}
       <div class="who">
         <div class="team-name">${esc(name)}</div>
-        <div class="sub">${owner && owner.display_name !== name ? `${esc(owner.display_name)} · ` : ''}${record(roster)}</div>
+        <div class="sub">${owner && owner.display_name !== name ? `${esc(owner.display_name)} · ` : ''}${record(roster)}${oppRoster ? ` · vs ${esc(teamName(s, oppRoster))}` : ''}</div>
       </div>
       <div class="score">
         <div class="pts">${points ? f2(points) : '–'}</div>
         <div class="sub">proj ${f2(proj)}</div>
-        ${oppRoster ? `<div class="sub">vs ${esc(teamName(s, oppRoster))}</div>` : ''}
       </div>
+      ${l.mine ? `<button class="waivers" data-action="claims">Waivers${claims ? ` <span class="count">${claims}</span>` : ''}</button>` : ''}
+      ${weekNav(s, week)}
     </section>`;
   }
 
@@ -129,7 +139,7 @@
     const button = editable && spot && (movable.has(spot) || s.swap === spot) ? spot : null;
     const cls = cardClass(ctx, spot);
     if (!id || id === '0') {
-      return `<article class="card empty${cls}"><div class="top">${slotBadge(slot, button)}<div class="info"><span class="name">Empty</span></div></div></article>`;
+      return `<article class="card empty${cls}">${slotBadge(slot, button)}<div class="headshot"></div><div class="info"><span class="name">Empty</span></div></article>`;
     }
     const p = s.players[id] || { name: `Player #${id}`, positions: [] };
     const locked = lockedGameId(locks[id]);
@@ -138,40 +148,36 @@
     const research = week.research[id];
     const pct = (n) => (n == null ? '–' : `${Math.ceil(n)}%`);
     return `<article class="card${cls}">
-      <div class="top">
-        ${slotBadge(slot, button)}
-        <img class="headshot" src="${headshot(id)}" alt="" loading="lazy">
-        <div class="info">
-          <div class="line1">
-            <span class="name">${esc(p.name)}</span>
-            ${positions(p)}
-            <span class="team">- ${esc(p.team || 'FA')}</span>${injuryTag(p)}
-          </div>
-          <div class="line2"><b>${pct(research?.owned)}</b> Rostered <span class="bar">|</span> <b>${pct(research?.started)}</b> Start</div>
-        </div>
-        <div class="week-pts">
-          <div>${f2(points[id])}</div>
-          <div class="sub">${lockedDay ? `locked ${f2(lockedDay.actual ?? lockedDay.proj)}` : `proj ${f2(lockInDefault(days))}`}</div>
-        </div>
+      ${slotBadge(slot, button)}
+      <img class="headshot" src="${headshot(id)}" alt="">
+      <div class="info">
+        <div class="line1"><span class="name">${esc(p.name)}</span>${injuryTag(p)}</div>
+        <div class="line2">${positions(p)} <span class="team">${esc(p.team || 'FA')}</span>
+          <span class="pct" title="Rostered / started in leagues like this one">${pct(research?.owned)} rost · ${pct(research?.started)} start</span></div>
       </div>
       <div class="days">${days.map((d) => dayCell(d, s.today)).join('')}</div>
+      <div class="week-pts">
+        <b>${f2(points[id])}</b>
+        <span>${lockedDay ? `lock ${f2(lockedDay.actual ?? lockedDay.proj)}` : `proj ${f2(lockInDefault(days))}`}</span>
+      </div>
     </article>`;
   }
 
+  // One day of a player's week: opponent, points (projected until played) and tip-off.
   function dayCell(d, today) {
-    const letter = weekday(d.date, 'narrow');
-    const isToday = (d.date === today ? ' today' : '') + (d.locked ? ' locked' : '');
-    if (!d.game) return `<div class="day${isToday}"><div class="cell"><span class="d">${letter}</span></div></div>`;
+    const cls = (d.date === today ? ' today' : '') + (d.locked ? ' locked' : '');
+    if (!d.game) return `<div class="day${cls}"><div class="cell"></div></div>`;
     const done = d.game.status === 'complete';
     const value = done || d.actual != null ? d.actual : d.proj;
     const time = done ? 'Final' : d.game.status === 'in_game' ? 'Live' : d.game.start ? gameTime(d.game.start) : '';
-    return `<div class="day game${isToday}${done ? ' done' : ''}">
+    const title = `${weekday(d.date)} ${d.home ? 'vs' : '@'} ${d.opponent}${time ? `, ${time}` : ''}${d.locked ? ', locked in' : ''}`;
+    return `<div class="day game${cls}${done ? ' done' : ''}" title="${esc(title)}">
+      ${d.locked ? '<span class="lock" aria-label="Locked in">🔒</span>' : ''}
       <div class="cell">
-        <span class="d">${letter}${d.locked ? ' <span class="lock" title="Locked in">🔒</span>' : ''}</span>
-        <span class="v">${value == null ? '' : f2(value)}</span>
         <span class="o">${d.home ? 'vs ' : '@'}${esc(d.opponent)}</span>
+        <span class="v">${value == null ? '–' : f2(value)}</span>
+        <span class="time">${esc(time)}</span>
       </div>
-      <div class="time">${esc(time)}</div>
     </div>`;
   }
 
@@ -182,7 +188,7 @@
       return `${n}${(!teen && { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10]) || 'th'}`;
     };
     const byId = Object.fromEntries(s.rosters.map((r) => [r.roster_id, r]));
-    return `<h3>Draft Picks</h3><ul class="picks">${s.picks.map((p) => `<li>
+    return `<div class="rhead"><div class="rtitle"><h3>Draft Picks</h3></div></div><ul class="picks">${s.picks.map((p) => `<li>
       <b>${esc(p.season)} ${ordinal(p.round)} Rd</b>
       ${p.original !== s.rosterId ? `<span class="sub">via ${esc(teamName(s, byId[p.original] || { roster_id: p.original }))}</span>` : ''}
     </li>`).join('')}</ul>`;
