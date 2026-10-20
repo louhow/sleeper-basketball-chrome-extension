@@ -87,6 +87,36 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
   }
 </script>`;
 
+// Sleeper's left sidebar, reduced to its league links: the item component's props
+// (league, selectLeague) and the router's sit a few fibers up from the link, and
+// Sleeper's own handler sends every league to /leagues/<id>.
+const NFL_LEAGUE = '1354521766382292992';
+const leagueNav = `<!doctype html><title>Sleeper</title>
+<div id="nav"></div>
+<script>
+  window.__sleeperNav = [];
+  window.__selected = [];
+  const router = { push: (path) => history.pushState({}, '', path) };
+  const fiber = (props, depth, rest) => (depth ? { memoizedProps: {}, return: fiber(props, depth - 1, rest) } : { memoizedProps: props, return: rest });
+  for (const [id, sport] of [['${NFL_LEAGUE}', 'nfl'], ['${LEAGUE}', 'nba']]) {
+    const link = document.createElement('a');
+    link.className = 'link-button nav-league-item-wrapper';
+    link.href = '/';
+    link.dataset.sport = sport;
+    link.innerHTML = '<div class="nav-league-item"><div class="league-title">' + sport + '</div></div>';
+    const item = { league: { league_id: id, sport }, selectLeague: (x) => window.__selected.push(x), closeNavbar: () => {} };
+    link.__reactInternalInstance$test = fiber(item, 2, fiber({ router, params: {} }, 5));
+    document.getElementById('nav').append(link);
+  }
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('.nav-league-item-wrapper');
+    if (!link) return;
+    e.preventDefault();
+    window.__sleeperNav.push(link.dataset.sport);
+    history.pushState({}, '', '/leagues/' + link.__reactInternalInstance$test.return.return.memoizedProps.league.league_id);
+  });
+</script>`;
+
 let context;
 let page;
 const pageErrors = [];
@@ -107,6 +137,8 @@ const sleeper = {
   // hours ago, with projections standing in as stats, so Lock-In has something to lock.
   midWeek: false,
   finished: new Set(),
+  // When set, it is week 1 of the regular season and no game has tipped off yet.
+  beforeTipoff: false,
 };
 
 // Picks each team's first game of week 1 up front, since the page loads scores
@@ -134,6 +166,16 @@ function fakeMidWeek(scores) {
   }
   return scores;
 }
+
+// Every game moves a day past now, keeping their order, and none has a score.
+function fakeBeforeTipoff(scores) {
+  const shift = Math.max(0, Date.now() + 24 * 3600e3 - Math.min(...scores.map((g) => g.start_time)));
+  for (const g of scores) {
+    g.status = 'pre_game';
+    g.start_time += shift;
+  }
+  return scores;
+}
 async function seedLegs(round) {
   if (sleeper.legs[round]) return;
   const res = await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}/matchups/${round}`);
@@ -146,11 +188,11 @@ async function answerGraphql(route) {
   const req = route.request();
   const auth = req.headers().authorization;
   if (!auth) {
-    // Public queries like scores stay live, optionally doctored for mid-week.
-    if (!sleeper.midWeek || !/query scores\b/.test(req.postDataJSON().query)) return route.continue();
+    // Public queries like scores stay live, optionally doctored for mid-week or before tip-off.
+    if (!(sleeper.midWeek || sleeper.beforeTipoff) || !/query scores\b/.test(req.postDataJSON().query)) return route.continue();
     const res = await route.fetch();
     const body = await res.json();
-    fakeMidWeek(body.data.scores);
+    (sleeper.midWeek ? fakeMidWeek : fakeBeforeTipoff)(body.data.scores);
     return route.fulfill({ response: res, json: body });
   }
   assert.equal(auth, FAKE_TOKEN, 'sends the page session token');
@@ -255,7 +297,14 @@ before(async () => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     return route.fallback();
   });
+  await context.route('https://api.sleeper.app/v1/state/nba', async (route) => {
+    // Both doctored weeks are week 1, whatever week it really is.
+    if (!(sleeper.midWeek || sleeper.beforeTipoff)) return route.continue();
+    const res = await route.fetch();
+    return route.fulfill({ response: res, json: { ...(await res.json()), season_type: 'regular', week: 1, display_week: 1 } });
+  });
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
+    if (sleeper.beforeTipoff) return route.fulfill({ json: [] });
     if (!sleeper.midWeek) return route.continue();
     const url = route.request().url().replace('/stats/', '/projections/');
     const projections = await (await fetch(url)).json();
@@ -537,6 +586,7 @@ async function pickTaxiEligibleBenchPlayer() {
 test('taxi: before the season, an eligible bench player trades places with a taxi player', async () => {
   documentBody = LOGGED_IN;
   sleeper.midWeek = false;
+  sleeper.beforeTipoff = true;
   const myRoster = await openMyTeam(TEAM_URL);
   assert.match(await shadowText('.taxi-head .hint'), /can move to taxi until the first game of the regular season tips off/);
 
@@ -567,6 +617,7 @@ test('taxi: before the season, an eligible bench player trades places with a tax
   await page.reload();
   await page.locator(panel(`[data-spot="t:${benchId}"]`)).waitFor({ timeout: 30000 });
   assert.ok(await page.locator(panel(`[data-spot="b:${taxiId}"]`)).count(), 'still on the bench after reload');
+  sleeper.beforeTipoff = false;
   documentBody = LOGGED_OUT;
 });
 
@@ -832,5 +883,22 @@ test('player card: opens from the Players and Trend tabs instead of Sleeper\'s c
     await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
   }
   assert.equal(await page.evaluate(() => window.__sleeperCards), 0, "Sleeper's own card never opens");
+  documentBody = LOGGED_OUT;
+});
+
+
+test('sidebar: from a Matchup tab, an NBA league opens on its Matchup tab', async () => {
+  documentBody = leagueNav;
+  await page.goto(`https://sleeper.com/leagues/${NFL_LEAGUE}/matchup`);
+  await page.locator('[data-sport=nba] .league-title').click();
+  assert.equal(new URL(page.url()).pathname, `/leagues/${LEAGUE}/matchup`);
+  assert.deepEqual(await page.evaluate(() => [window.__selected, window.__sleeperNav]), [[LEAGUE], []]);
+  // Other sports, and other tabs, keep Sleeper's own navigation.
+  await page.locator('[data-sport=nfl]').click();
+  assert.equal(new URL(page.url()).pathname, `/leagues/${NFL_LEAGUE}`);
+  await page.goto(`https://sleeper.com/leagues/${NFL_LEAGUE}/league`);
+  await page.locator('[data-sport=nba]').click();
+  assert.equal(new URL(page.url()).pathname, `/leagues/${LEAGUE}`);
+  assert.deepEqual(await page.evaluate(() => window.__sleeperNav), ['nba']);
   documentBody = LOGGED_OUT;
 });

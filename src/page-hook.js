@@ -4,10 +4,13 @@
 // over those clicks once the extension has confirmed the league is NBA. The
 // player id (and Sleeper's own waiver status) come from React props, which
 // only this world can read, and go to the extension as JSON in a DOM event.
+// It also keeps the Matchup tab when switching to an NBA league from the sidebar.
 (() => {
   const ACTION = '.player-action-button.waiver, .player-action-button.add';
   // Player name and headshot on the Players tab, and a row on the Trend tab.
   const PLAYER = '.player-meta-container, .trending-list-item .player-details';
+  // A league in the left sidebar.
+  const NAV_LEAGUE = 'a.nav-league-item-wrapper';
   const MAX_DEPTH = 12;
 
   // The nearest props (walking up from the element) that pass `match`.
@@ -41,5 +44,22 @@
     } else {
       send('snp:player-card', { playerId: String(p.playerId || p.player.player_id) });
     }
+  }, true);
+
+  // Sleeper's sidebar sends every league to /leagues/<id>, which lands on its
+  // League tab. From a Matchup tab, an NBA league opens on its Matchup tab
+  // instead, through Sleeper's own router so its state stays in step.
+  addEventListener('click', (e) => {
+    if (!/^\/leagues\/\d+\/matchup(\/|$)/.test(location.pathname) || !(e.target instanceof Element)) return;
+    const link = e.target.closest(NAV_LEAGUE);
+    const item = link && props(link, (x) => x.league && x.selectLeague);
+    const nav = item && props(link, (x) => x.router?.push);
+    if (item?.league.sport !== 'nba' || !nav) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const id = item.league.league_id;
+    item.selectLeague(id);
+    item.closeNavbar?.();
+    nav.router.push(`/leagues/${id}/matchup`);
   }, true);
 })();
