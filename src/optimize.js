@@ -2,7 +2,7 @@
 // week, with any score benching would throw away. Nothing saves until the
 // owner applies. Pure: state -> HTML.
 (globalThis.SNP ||= {}).optimize = (() => {
-  const { playerDays } = globalThis.SNP.model;
+  const { playerDays, scoreTier } = globalThis.SNP.model;
   const { esc, f2, headshot, positions, injuryTag, slotBadge, weekday, nextGame, dialog, dialogErrors, shortName } = globalThis.SNP.ui;
 
   // Plain text for the "How it picks" tooltip.
@@ -13,7 +13,7 @@
     '3. It tries every way to fit your players into the starting slots and keeps the lineup whose numbers add up highest. Players who fit only one slot (like a pure C) end up there, and versatile players fill G, F and UTIL.',
     '4. Locked-in players, and anyone in a game right now, stay where they are.',
     '5. When two lineups add up the same, it keeps the one that moves the fewest players.',
-    '6. Benching a starter whose finished game you could still lock throws that score away. The row says so, and if it was a green score (24 or more) you have to confirm it.',
+    '6. Benching a starter whose finished game you could still lock throws that score away, since bench players can\'t lock in. It warns you, and if it was a green score (24 or more) you have to confirm it.',
   ].join('\n');
 
   const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
@@ -24,17 +24,21 @@
     const { plan } = m;
     const name = (id) => s.players[id]?.name || `Player #${id}`;
     const how = `<span class="how" tabindex="0" aria-describedby="how-tip">How it picks<span class="how-tip" id="how-tip" role="tooltip">${esc(HOW)}</span></span>`;
-    // Only a green score is worth stopping for; smaller ones are noted on their row.
+    // Giving up a green score stops you until you confirm; any smaller lockable score is a softer warning.
     const good = plan.changes.filter((c) => c.goodScore);
+    const soft = plan.changes.filter((c) => c.lost && !c.goodScore);
     const goodTotal = good.reduce((sum, c) => sum + c.lost.actual, 0);
     const blocked = good.length > 0 && !m.ack;
-    const warning = good.length ? `<div class="lose-banner" role="alert">
-        <p>${names(good.map((c) => `<b>${esc(name(c.id))}</b>`))} scored ${good.length > 1 ? 'green games you could still lock in' : `${f2(good[0].lost.actual)} in a game you could still lock in`}.
+    const who = (list) => names(list.map((c) => `<b>${esc(name(c.id))}</b> ${score(c.lost.actual)}`));
+    const warning = (good.length ? `<div class="lose-banner" role="alert">
+        <p>${who(good)} ${good.length > 1 ? 'have green games' : 'has a green game'} you could still lock in.
         Bench players can't lock in, so benching them gives up ${f2(goodTotal)} pts.</p>
         <label class="ack"><input type="checkbox" data-op-ack ${m.ack ? 'checked' : ''} ${m.saving ? 'disabled' : ''}>
           <span>Bench ${names(good.map((c) => esc(shortName(s.players[c.id]))))} anyway</span>
         </label>
-      </div>` : '';
+      </div>` : '') + (soft.length ? `<div class="warn-banner" role="status">
+        <p>${who(soft)} ${soft.length > 1 ? 'have finished games' : 'has a finished game'} you could still lock in. On the bench ${soft.length > 1 ? 'those scores' : 'that score'} can't be locked.</p>
+      </div>` : '');
     const fixed = plan.fixed.length ? `<p class="op-fixed">Staying put: ${plan.fixed.map((f) =>
       `${esc(shortName(s.players[f.id]))} (${f.reason === 'locked' ? 'locked in' : 'playing now'})`).join(', ')}</p>` : '';
     const body = plan.changes.length ? `
@@ -72,9 +76,9 @@
     const p = s.players[c.id] || { name: `Player #${c.id}`, positions: [] };
     const days = playerDays(s.weeks[s.week], p.team, c.id);
     const sub = c.lost
-      ? `<span class="sub${c.goodScore ? ' lose' : ''}">Gives up ${f2(c.lost.actual)} · ${esc(gameText(c.lost))}</span>`
+      ? `<span class="sub ${c.goodScore ? 'lose' : 'warn'}">Can't lock ${score(c.lost.actual)} · ${esc(gameText(c.lost))}</span>`
       : `<span class="sub">${esc(nextGame(days))}</span>`;
-    return `<div class="op-row${c.goodScore ? ' losing' : ''}${c.to === 'BN' ? ' out' : ''}">
+    return `<div class="op-row${c.goodScore ? ' losing' : c.lost ? ' warning' : ''}${c.to === 'BN' ? ' out' : ''}">
       <span class="op-move">${slotBadge(c.from)}<span class="arrow" aria-label="to">→</span>${slotBadge(c.to)}</span>
       <img class="headshot" src="${headshot(c.id)}" alt="" data-player="${esc(c.id)}">
       <span class="dp-info">
@@ -84,6 +88,11 @@
       <span class="dp-pts">${f2(c.perGame)}</span>
       <span class="dp-gms" title="${esc(games(c.gamesLeft))} left">${c.gamesLeft}</span>
     </div>`;
+  }
+
+  // A finished game's fantasy points in its score color (see model.scoreTier).
+  function score(points) {
+    return `<span class="score ${scoreTier(points)}">${f2(points)}</span>`;
   }
 
   return { render, HOW };

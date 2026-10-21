@@ -34,6 +34,10 @@
   --sf: #9ff0cb;
   --pf: #a79df5;
   --c: #c48df1;
+  /* Score tiers (model.scoreTier), in the stat tables' heat colors. */
+  --score-green: rgba(84, 132, 100, 0.85);
+  --score-yellow: rgba(128, 122, 78, 0.85);
+  --score-red: rgba(150, 72, 96, 0.85);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1475,6 +1479,45 @@ button.optimize:hover:not(:disabled) {
 .lose-banner p + p {
   margin-top: 6px;
 }
+.warn-banner {
+  margin: 4px 0 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(248, 210, 75, 0.1);
+  color: #f5e3a3;
+  font-size: 13px;
+}
+.warn-banner p {
+  margin: 0;
+}
+.warn-banner b {
+  color: var(--text);
+}
+.op-row.warning {
+  border: 1px solid rgba(248, 210, 75, 0.4);
+  border-radius: 10px;
+  background: rgba(248, 210, 75, 0.04);
+}
+.sub.warn {
+  overflow: hidden;
+  color: var(--warn);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A finished game's fantasy points in its score tier color, as in the game log. */
+.score {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.score.green { background: var(--score-green); }
+.score.yellow { background: var(--score-yellow); }
+.score.red { background: var(--score-red); }
 .lose-banner b {
   color: var(--text);
 }
@@ -1866,10 +1909,10 @@ h2.pc-name {
   background: rgba(255, 255, 255, 0.07);
   font-weight: 800;
 }
-/* Fantasy points by score tier (model.scoreTier), in the stat tables' heat colors. */
-.pc-table td.fpts.green { background: rgba(84, 132, 100, 0.75); }
-.pc-table td.fpts.yellow { background: rgba(128, 122, 78, 0.75); }
-.pc-table td.fpts.red { background: rgba(150, 72, 96, 0.75); }
+/* Fantasy points by score tier. */
+.pc-table td.fpts.green { background: var(--score-green); }
+.pc-table td.fpts.yellow { background: var(--score-yellow); }
+.pc-table td.fpts.red { background: var(--score-red); }
 .pc-table td.dim {
   color: var(--muted);
 }

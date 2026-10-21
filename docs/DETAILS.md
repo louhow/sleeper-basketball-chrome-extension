@@ -34,8 +34,9 @@ Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave
 - A starter with a finished game that can still be locked is worth at least that game's score.
 - Lineup: tries every way to fit the movable players into the starting slots and keeps the highest total, so scarce slots go to the players who can only fill them. Ties keep the most players where they are, then put players in their most specific slot.
 - Locked-in players and players in a game right now stay put.
-- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The row notes it ("Gives up 12.42 · Tue vs OKC").
+- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The row turns yellow ("Can't lock 12.42 · Tue vs OKC") with a yellow note at the top; Apply still works.
 - Green scores (24+): giving one up turns the row red, explains it at the top, and keeps Apply ("Apply and lose N pts") disabled until you tick "Bench … anyway".
+- Scores in the dialog are colored by tier, like the game log.
 - Apply works the plan out again first; if a game tipped off meanwhile and the plan changed, it shows the new plan instead of saving. The lineup saves in one `update_matchup_leg` (in season) or `roster_update_starters`, leaving Lock-In picks untouched.
 - The top of the dialog shows the starters' projected points per game now and after the changes.
 - The dialog's "How it picks" label shows these rules on hover or focus.

@@ -961,10 +961,13 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   assert.match(await page.locator(dialog('.how-tip')).innerText(), /^How it picks:\n1\. Every player gets a number/);
   await page.screenshot({ path: `${OUT}optimize-how.png` });
   await page.mouse.move(0, 0);
-  // A small score given up is noted on its row, without an alert.
-  const victimRow = page.locator(dialog('.op-row')).filter({ hasText: players[victim].full_name });
-  assert.match(await victimRow.textContent(), /Gives up 3\.00 · \w{3} (vs|@) \w+/);
-  assert.equal(await victimRow.evaluate((el) => el.classList.contains('losing')), false);
+  // A small lockable score given up is a soft warning: yellow, and Apply still works.
+  const victimRow = page.locator(dialog('.op-row.warning')).filter({ hasText: players[victim].full_name });
+  assert.match(await victimRow.textContent(), /Can't lock 3\.00 · \w{3} (vs|@) \w+/);
+  assert.equal(await victimRow.locator('.score.red').textContent(), '3.00', 'the score shows in its tier color');
+  assert.match(await page.locator(dialog('.warn-banner')).textContent(), new RegExp(`${players[victim].full_name} 3\\.00.* finished games? you could still lock in`));
+  assert.equal(await page.locator(dialog('.lose-banner')).count(), 0, 'no hard stop for a red score');
+  assert.equal(await page.locator(dialog('[data-action="apply-lineup"]')).isDisabled(), false);
   assert.equal(await page.locator(dialog('.op-row')).filter({ hasText: players[star].full_name }).count(), 1, 'the must-start comes in');
   await page.screenshot({ path: `${OUT}optimize-dialog.png` });
 
@@ -993,7 +996,7 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   await page.locator(dialog('.lose-banner')).waitFor();
   assert.match(await page.locator(dialog('.lose-banner')).textContent(), new RegExp(players[victim].full_name));
   // Big games earn scoring bonuses too, so the score is at least what was set.
-  const given = Number((await page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name }).textContent()).match(/Gives up (\d+\.\d\d)/)[1]);
+  const given = Number((await page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name }).textContent()).match(/Can't lock (\d+\.\d\d)/)[1]);
   assert.ok(given >= 24, `a green score (${given})`);
   const apply = page.locator(dialog('[data-action="apply-lineup"]'));
   assert.match(await apply.textContent(), /^Apply and lose \d+\.\d\d pts$/);
