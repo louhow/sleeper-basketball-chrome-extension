@@ -311,6 +311,8 @@ before(async () => {
     return route.fulfill({ response: res, json: sleeper.projections(await res.json()) });
   });
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
+    // Only the weekly stats are doctored; the player card's own stats go through.
+    if (!/\/stats\/nba\/\d+\/\d+/.test(route.request().url())) return route.fallback();
     if (sleeper.beforeTipoff) return route.fulfill({ json: [] });
     if (!sleeper.midWeek) return route.continue();
     const url = route.request().url().replace('/stats/', '/projections/');
@@ -951,14 +953,32 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   const before = sleeper.mutations.length;
   await page.locator(panel('button.optimize')).click();
   await page.locator(dialog('.op-row')).first().waitFor();
-  assert.match(await page.locator(dialog('.how')).getAttribute('title'), /^How it picks:\n1\. Every player gets a number/);
+  assert.match(await page.locator(dialog('.op-sum')).textContent(), /Lineup projection\s*Starters' points per game\s*\d+\.\d\d\s*→\s*\d+\.\d\d\s*\+\d+\.\d\d/);
+  // The tooltip shows on hover, inside the dialog.
+  assert.equal(await page.locator(dialog('.how-tip')).isVisible(), false);
+  await page.locator(dialog('.how')).hover();
+  assert.match(await page.locator(dialog('.how-tip')).innerText(), /^How it picks:\n1\. Every player gets a number/);
+  await page.screenshot({ path: `${OUT}optimize-how.png` });
+  await page.mouse.move(0, 0);
   const victimRow = page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name });
   assert.equal(await victimRow.count(), 1, 'the benched UTIL starter is flagged');
-  assert.match(await victimRow.textContent(), new RegExp(`Loses ${lost} from`));
+  assert.match(await victimRow.textContent(), new RegExp(`Loses ${lost} · \\w{3} (vs|@) \\w+ Beat proj`));
   assert.match(await page.locator(dialog('.lose-banner')).textContent(), new RegExp(`${players[victim].full_name}.* a finished game you could still lock in`));
-  assert.match(await page.locator(dialog('[data-action="apply-lineup"]')).textContent(), /^Apply and lose \d+\.\d\d pts$/);
+  const apply = page.locator(dialog('[data-action="apply-lineup"]'));
+  assert.match(await apply.textContent(), /^Apply and lose \d+\.\d\d pts$/);
+  // Mid-week stats stand in from projections, so every lost score met its projection: it takes the tick box.
+  assert.equal(await apply.isDisabled(), true, 'giving up a good score needs the tick box');
   assert.equal(await page.locator(dialog('.op-row')).filter({ hasText: players[star].full_name }).count(), 1, 'the must-start comes in');
   await page.screenshot({ path: `${OUT}optimize-dialog.png` });
+
+  // A player's card opens over the dialog; closing it comes back to the dialog.
+  await page.locator(dialog(`.op-row button.name[data-player="${star}"]`)).click();
+  await page.locator(dialog('h2.pc-name')).filter({ hasText: players[star].full_name }).waitFor({ timeout: 30000 });
+  assert.equal(await page.locator(dialog('.op-row')).first().isVisible(), true, 'the dialog stays underneath');
+  await page.screenshot({ path: `${OUT}optimize-card.png` });
+  await page.keyboard.press('Escape');
+  await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
+  await page.locator(dialog('.op-row')).first().waitFor();
 
   // Dismissing changes nothing.
   await page.locator(dialog('.op-foot button[data-action="close-modal"]')).click();
@@ -966,6 +986,7 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   assert.equal(sleeper.mutations.length, before, 'nothing saved on cancel');
 
   await page.locator(panel('button.optimize')).click();
+  await page.locator(dialog('[data-op-ack]')).check();
   await page.locator(dialog('[data-action="apply-lineup"]')).click();
   await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
   await page.locator(panel('.notice.ok')).waitFor();

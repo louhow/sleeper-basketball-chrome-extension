@@ -351,6 +351,8 @@
           gamesLeft,
           // Benching a starter whose finished game could still be locked throws that score away.
           lost: benched && banked?.actual > 0 ? banked : null,
+          // A good score: that game beat its own projection.
+          goodScore: benched && banked?.actual > 0 && banked.proj != null && banked.actual >= banked.proj,
         };
       })
       // Lineup order, then whoever goes to the bench.

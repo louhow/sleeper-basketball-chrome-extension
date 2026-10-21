@@ -311,8 +311,14 @@ test('best lineup: benching a starter with a lockable finished game flags the lo
   const plan = model.bestLineup(l, OPT_NOW);
   const benched = plan.changes.find((c) => c.id === 'kj');
   assert.equal(benched.to, 'BN');
-  assert.deepEqual([benched.lost.game.id, benched.lost.actual], ['k1', 12.5]);
+  assert.deepEqual([benched.lost.game.id, benched.lost.actual, benched.goodScore], ['k1', 12.5, true], '12.5 beat the 10 projection');
   assert.equal(plan.changes.find((c) => c.id === 'wing').lost, null, 'a bench player had nothing to lock');
+  const meh = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
+    kj: [['k1', '2026-10-20', 'complete', 10, 8], ['k2', '2026-10-23', 'pre_game', 9]],
+    wing: [['w1', '2026-10-22', 'pre_game', 20]],
+  });
+  const under = model.bestLineup(meh, OPT_NOW).changes.find((c) => c.id === 'kj');
+  assert.deepEqual([under.lost.actual, under.goodScore], [8, false], 'still lost, but under its projection');
   // Worth at least the lockable score: a 12.5 finished game beats a 12 projection.
   const close = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
     kj: [['k1', '2026-10-20', 'complete', 10, 12.5], ['k2', '2026-10-23', 'pre_game', 9]],

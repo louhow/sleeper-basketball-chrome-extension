@@ -35,8 +35,11 @@ Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave
 - Lineup: tries every way to fit the movable players into the starting slots and keeps the highest total, so scarce slots go to the players who can only fill them. Ties keep the most players where they are, then put players in their most specific slot.
 - Locked-in players and players in a game right now stay put.
 - Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The dialog lists each one in red, and the button reads "Apply and lose N pts".
+- Good scores: when a lost score met or beat that game's projection, the row says "Beat proj" and Apply stays disabled until you tick "Bench … anyway".
 - Apply works the plan out again first; if a game tipped off meanwhile and the plan changed, it shows the new plan instead of saving. The lineup saves in one `update_matchup_leg` (in season) or `roster_update_starters`, leaving Lock-In picks untouched.
-- The dialog's "How it picks" label has a plain-text tooltip with these rules.
+- The top of the dialog shows the starters' projected points per game now and after the changes.
+- The dialog's "How it picks" label shows these rules on hover or focus.
+- Clicking a player in the dialog opens their player card over it; closing the card returns to the dialog.
 
 ### Matchup
 

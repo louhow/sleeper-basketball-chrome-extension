@@ -1332,6 +1332,7 @@ button.optimize:hover:not(:disabled) {
 }
 .how {
   margin-left: 10px;
+  font-weight: 700;
   padding: 2px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
@@ -1344,8 +1345,121 @@ button.optimize:hover:not(:disabled) {
 .how::after {
   content: " ⓘ";
 }
+.how:hover,
 .how:focus-visible {
-  outline: 2px solid var(--accent);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+  outline: none;
+}
+/* The tooltip spans the dialog's width under its header, so it never clips at the edge. */
+.dialog-head:has(.how) {
+  position: relative;
+  z-index: 2;
+}
+.how-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 16px;
+  right: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: #121925;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: pre-line;
+  cursor: default;
+}
+.how:hover .how-tip,
+.how:focus .how-tip {
+  display: block;
+}
+.op-sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 0 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.op-sum .label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.op-sum .label .sub {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.op-sum .nums {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.op-sum b {
+  font-size: 22px;
+  font-weight: 900;
+}
+.op-sum b:first-child {
+  color: var(--muted);
+}
+.op-sum .arrow {
+  color: var(--muted);
+  font-size: 16px;
+}
+.op-sum .gain {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 206, 184, 0.16);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+}
+.op-sum .gain.down {
+  background: rgba(255, 91, 110, 0.16);
+  color: var(--danger);
+}
+.ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 91, 110, 0.3);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.ack input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+.dp-name button.name {
+  margin-right: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  vertical-align: baseline;
+}
+.op-row img.headshot[data-player] {
+  cursor: pointer;
 }
 .lose-banner {
   margin: 4px 0 8px;
@@ -1416,8 +1530,21 @@ button.optimize:hover:not(:disabled) {
   font-size: 12px;
 }
 .sub.lose {
+  overflow: hidden;
   color: var(--danger);
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.beat {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(0, 206, 184, 0.16);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 .op-fixed {
   margin: 12px 4px 0;

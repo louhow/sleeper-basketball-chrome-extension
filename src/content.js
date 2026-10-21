@@ -89,7 +89,7 @@
       claims: null, // the logged-in owner's pending waiver claims
       cards: {}, // player card data by player id, kept for the session
       // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving } | { kind: 'player', playerId, season }
-      // | { kind: 'optimize', plan, errors, saving }
+      // | { kind: 'optimize', plan, ack, errors, saving }; a player card can open over it (`back`).
       modal: null,
     };
     let destroyed = false;
@@ -157,7 +157,9 @@
       const focused = layerShadow.activeElement?.matches?.('[data-bid]');
       const kind = state.modal?.kind;
       const dialog = kind === 'player' ? card.render(state) : kind === 'optimize' ? optimize.render(state) : waivers.render(state);
-      layerRoot.innerHTML = `<div class="page-layer">${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
+      // A player card opened from the optimize dialog sits on top of it.
+      const under = state.modal?.back?.kind === 'optimize' ? optimize.render(state, state.modal.back) : '';
+      layerRoot.innerHTML = `<div class="page-layer">${under}${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
       for (const [key, top] of scrolls) {
         const el = key === 'dialog' ? layerRoot.querySelector('.dialog-body') : layerRoot.querySelector(`[data-scroll="${key}"]`);
         if (el) el.scrollTop = top;
@@ -438,21 +440,22 @@
     }
 
     // Player card: each part loads on its own and renders as it arrives.
-    function openCard(playerId) {
+    // `back` is a dialog the card opens over, shown again when the card closes.
+    function openCard(playerId, back = null) {
       if (!state.ready) {
         // Clicked from the Players or Trend tab before the league loaded: open once it has.
         pendingCard = playerId;
         return;
       }
-      state.modal = { kind: 'player', playerId, season: null };
+      state.modal = { kind: 'player', playerId, season: null, back };
       state.notice = null;
       schedule();
       if (state.cards[playerId]) return;
       const c = (state.cards[playerId] = { logs: {} });
       const player = state.players[playerId] || {};
       const current = Number(state.league.season);
-      const back = Math.min(Math.max(Number(player.years_exp) || 0, 0), CAREER_SEASONS - 1);
-      const years = Array.from({ length: back + 1 }, (_, i) => current - i);
+      const seasonsBack = Math.min(Math.max(Number(player.years_exp) || 0, 0), CAREER_SEASONS - 1);
+      const years = Array.from({ length: seasonsBack + 1 }, (_, i) => current - i);
       c.careerYears = years.length;
       const id = encodeURIComponent(playerId);
       const part = (promise, apply, fallback) => promise
@@ -516,7 +519,7 @@
 
     function closeModal() {
       if (state.modal?.saving) return;
-      state.modal = null;
+      state.modal = state.modal?.back ?? null;
       schedule();
     }
 
@@ -696,7 +699,7 @@
       state.swap = null;
       state.lockConfirm = null;
       state.notice = null;
-      state.modal = { kind: 'optimize', plan: model.bestLineup(lineup, Date.now()), errors: [], saving: false };
+      state.modal = { kind: 'optimize', plan: model.bestLineup(lineup, Date.now()), ack: false, errors: [], saving: false };
       schedule();
     }
 
@@ -711,9 +714,12 @@
       if (JSON.stringify(plan.starters) !== JSON.stringify(m.plan.starters) ||
         JSON.stringify(plan.changes) !== JSON.stringify(m.plan.changes)) {
         m.plan = plan;
+        m.ack = false;
         m.errors = ['Games have tipped off since this opened. Review the updated changes.'];
         return schedule();
       }
+      // Giving up a score that beat its projection takes the tick box.
+      if (plan.changes.some((c) => c.goodScore) && !m.ack) return;
       // Names a few moves; past that, just the count, so the notice stays one line.
       const moved = plan.changes.length > 3 ? `${plan.changes.length} lineup changes` : plan.changes
         .map(({ id, to }) => `${ui.shortName(state.players[id] || { name: `Player #${id}` })} to ${to === 'BN' ? 'bench' : to}`)
@@ -823,6 +829,8 @@
       }
       const confirmed = e.target.closest('[data-claim-cancel-confirm]');
       if (confirmed) return cancelClaim(confirmed.dataset.claimCancelConfirm);
+      const player = e.target.closest('[data-player]');
+      if (player && state.modal?.kind === 'optimize' && !state.modal.saving) return openCard(player.dataset.player, state.modal);
       const season = e.target.closest('[data-card-season]');
       if (season && state.modal?.kind === 'player') {
         const c = state.cards[state.modal.playerId];
@@ -837,6 +845,11 @@
       if (action === 'close-modal') closeModal();
       if (action === 'submit-claim') submitClaim();
       if (action === 'apply-lineup') applyOptimize();
+    });
+    layerRoot.addEventListener('change', (e) => {
+      if (!e.target.matches('[data-op-ack]') || state.modal?.kind !== 'optimize') return;
+      state.modal.ack = e.target.checked;
+      schedule();
     });
     layerRoot.addEventListener('input', (e) => {
       // Kept without a re-render so typing never loses focus.
