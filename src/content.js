@@ -2,8 +2,9 @@
 // and /matchup) with rosters, schedules, projections, lineup swaps and Lock-In.
 // Falls back to a floating panel when the page has no placeholder to fill.
 // On every page of an NBA league it also answers Sleeper's waiver and add
-// buttons (see page-hook.js) with a bid dialog.
-(() => {
+// buttons (see page-hook.content.js) with a bid dialog.
+// `css` is panel.css, inlined into each shadow root so nothing ever paints unstyled.
+export function start(css) {
   const { createApi, view, model, scoring, ui, waivers, optimize, card } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
   const PANEL_PAGES = new Set(['team', 'matchup']);
@@ -19,9 +20,6 @@
   const CAREER_SEASONS = 10;
   const CARD_SEASON_TABS = 6;
   const TRANSACTION_FIELDS = 'adds drops leg roster_ids settings status transaction_id type created creator';
-
-  // The stylesheet is inlined into each shadow root, so nothing ever paints unstyled.
-  const stylesheet = fetch(chrome.runtime.getURL('src/panel.css')).then((r) => r.text());
 
   let active = null;
 
@@ -43,20 +41,15 @@
     host.id = 'sleeper-nba-panel';
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = '<style></style><div class="root"></div>';
+    shadow.querySelector('style').textContent = css;
     const root = shadow.querySelector('.root');
     // Dialogs and Players-tab notices live in their own host over the whole page.
     const layer = document.createElement('div');
     layer.id = 'sleeper-nba-dialog';
     const layerShadow = layer.attachShadow({ mode: 'open' });
     layerShadow.innerHTML = '<style></style><div class="root"></div>';
+    layerShadow.querySelector('style').textContent = css;
     const layerRoot = layerShadow.querySelector('.root');
-    let styled = false;
-    stylesheet.then((css) => {
-      shadow.querySelector('style').textContent = css;
-      layerShadow.querySelector('style').textContent = css;
-      styled = true;
-      schedule();
-    });
     let mountedAt = Date.now();
     let hidden = null; // Sleeper's placeholder, hidden while we fill its spot
 
@@ -135,7 +128,7 @@
       if (frame || destroyed) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        if (destroyed || !styled) return;
+        if (destroyed) return;
         state.now = Date.now();
         renderLayer();
         // Blank until everything for the first paint is in, like Sleeper's own tabs.
@@ -950,4 +943,4 @@
   addEventListener('popstate', sync);
   setInterval(sync, 500);
   sync();
-})();
+}

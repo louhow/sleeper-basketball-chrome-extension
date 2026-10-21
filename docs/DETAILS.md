@@ -120,7 +120,8 @@ It enables:
 ```sh
 npm install
 npm test          # unit tests: scoring, data model, rendering
-npm run test:e2e  # headless Chromium with the extension loaded
+npm run test:e2e  # builds, then runs headless Chromium with .output/chrome-mv3 loaded
+npm run dev       # dev build in .output/chrome-mv3-dev; load it unpacked once and it reloads on every change
 ```
 
 Logged-out visitors get redirected away from league pages, so the e2e test serves a stand-in page that mirrors the empty Team tab's markup, and keeps public API calls live.

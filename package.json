@@ -5,10 +5,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "postinstall": "wxt prepare",
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
     "test": "TZ=America/New_York node --test 'test/unit/*.test.js'",
-    "test:e2e": "mkdir -p test-results && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=test-results/e2e.tap 'test/e2e/*.test.js'"
+    "test:e2e": "wxt build && mkdir -p test-results && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=test-results/e2e.tap 'test/e2e/*.test.js'"
   },
   "devDependencies": {
-    "playwright": "^1.64.1"
+    "playwright": "^1.64.1",
+    "wxt": "^0.21.4"
   }
 }

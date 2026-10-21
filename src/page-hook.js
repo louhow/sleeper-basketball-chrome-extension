@@ -5,7 +5,7 @@
 // player id (and Sleeper's own waiver status) come from React props, which
 // only this world can read, and go to the extension as JSON in a DOM event.
 // It also keeps the Matchup tab when switching to an NBA league from the sidebar.
-(() => {
+export function hookPage() {
   const ACTION = '.player-action-button.waiver, .player-action-button.add';
   // Player name and headshot on the Players tab, and a row on the Trend tab.
   const PLAYER = '.player-meta-container, .trending-list-item .player-details';
@@ -62,4 +62,4 @@
     item.closeNavbar?.();
     nav.router.push(`/leagues/${id}/matchup`);
   }, true);
-})();
+}
