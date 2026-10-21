@@ -680,7 +680,15 @@ test('waivers: W on the Players tab opens a bid dialog and places a FAAB bid', a
   assert.match(await dialogText('.dialog-head'), new RegExp(`Make Waiver Bid\\s*Bid for ${waiverPlayer.name}`));
   assert.match(await dialogText('.banner'), /Your roster is full, please select a player to drop/);
   assert.match(await dialogText('.bid-form'), /\(\$\d+ remaining\)/);
-  assert.equal(await page.locator(dialog('[data-bid]')).evaluate((el) => el === el.getRootNode().activeElement), true, 'bid input focused');
+  // This failed once in a full run and never again in 35 more; if it recurs, the message says where focus was.
+  const focus = await page.locator(dialog('[data-bid]')).evaluate((el) => ({
+    focused: el === el.getRootNode().activeElement,
+    pageHasFocus: document.hasFocus(),
+    documentActive: `${document.activeElement?.tagName}#${document.activeElement?.id}`,
+    layerActive: el.getRootNode().activeElement?.outerHTML?.slice(0, 80) ?? null,
+    layers: document.querySelectorAll('#sleeper-nba-dialog').length,
+  }));
+  assert.equal(focus.focused, true, `bid input focused: ${JSON.stringify(focus)}`);
 
   await page.locator(dialog('[data-action="submit-claim"]')).click();
   assert.match(await dialogText('.dialog-errors'), /You must select 1 player to drop/);
@@ -985,8 +993,10 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
   assert.equal(sleeper.mutations.length, before, 'nothing saved on cancel');
 
-  // Now the UTIL starter's finished game was green (24+) and every bench player is a must-start.
+  // Now the UTIL starter's finished game was green (24+) and every bench player is a must-start,
+  // the star most of all, so ties among the bench can't leave them out.
   sleeper.projections = (rows) => rows.map((r) => {
+    if (r.player_id === star) return { ...r, stats: { pts: statPts(60) } };
     if (bench.includes(r.player_id)) return { ...r, stats: { pts: statPts(50) } };
     if (r.player_id === victim) return { ...r, stats: { pts: sleeper.finished.has(r.game_id) ? statPts(30) : 0 } };
     return r;
