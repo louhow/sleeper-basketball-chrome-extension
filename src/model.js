@@ -258,6 +258,11 @@
     };
   }
 
+  // Score colors as Sleeper's mobile app shows a game's fantasy points
+  // (green 24+, yellow 15+, red below). Thresholds observed, not from the API.
+  const SCORE_TIERS = [[24, 'green'], [15, 'yellow'], [-Infinity, 'red']];
+  const scoreTier = (points) => SCORE_TIERS.find(([min]) => points >= min)[1];
+
   // Lineup optimizer. A player's worth as a starter is what they're projected
   // to score per game over the games they have left this week (0 with none
   // left). A starter whose finished game can still be locked is worth at least
@@ -351,8 +356,8 @@
           gamesLeft,
           // Benching a starter whose finished game could still be locked throws that score away.
           lost: benched && banked?.actual > 0 ? banked : null,
-          // A good score: that game beat its own projection.
-          goodScore: benched && banked?.actual > 0 && banked.proj != null && banked.actual >= banked.proj,
+          // A green score is worth stopping for; anything less is just noted.
+          goodScore: benched && banked?.actual > 0 && scoreTier(banked.actual) === 'green',
         };
       })
       // Lineup order, then whoever goes to the bench.
@@ -453,7 +458,7 @@
   return {
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen, reserveEligible,
-    lockedGameId, lockState, bestLineup, winProbability, standingsRanks,
+    lockedGameId, lockState, scoreTier, bestLineup, winProbability, standingsRanks,
     FAAB, rosterRoom, faabLeft, claimError, sortClaims,
   };
 })();

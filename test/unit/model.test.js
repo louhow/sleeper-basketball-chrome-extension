@@ -311,14 +311,14 @@ test('best lineup: benching a starter with a lockable finished game flags the lo
   const plan = model.bestLineup(l, OPT_NOW);
   const benched = plan.changes.find((c) => c.id === 'kj');
   assert.equal(benched.to, 'BN');
-  assert.deepEqual([benched.lost.game.id, benched.lost.actual, benched.goodScore], ['k1', 12.5, true], '12.5 beat the 10 projection');
+  assert.deepEqual([benched.lost.game.id, benched.lost.actual, benched.goodScore], ['k1', 12.5, false], '12.5 is not a green score');
   assert.equal(plan.changes.find((c) => c.id === 'wing').lost, null, 'a bench player had nothing to lock');
-  const meh = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
-    kj: [['k1', '2026-10-20', 'complete', 10, 8], ['k2', '2026-10-23', 'pre_game', 9]],
-    wing: [['w1', '2026-10-22', 'pre_game', 20]],
+  const green = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
+    kj: [['k1', '2026-10-20', 'complete', 10, 24], ['k2', '2026-10-23', 'pre_game', 9]],
+    wing: [['w1', '2026-10-22', 'pre_game', 30]],
   });
-  const under = model.bestLineup(meh, OPT_NOW).changes.find((c) => c.id === 'kj');
-  assert.deepEqual([under.lost.actual, under.goodScore], [8, false], 'still lost, but under its projection');
+  const big = model.bestLineup(green, OPT_NOW).changes.find((c) => c.id === 'kj');
+  assert.deepEqual([big.lost.actual, big.goodScore], [24, true], 'benching a green score is flagged');
   // Worth at least the lockable score: a 12.5 finished game beats a 12 projection.
   const close = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
     kj: [['k1', '2026-10-20', 'complete', 10, 12.5], ['k2', '2026-10-23', 'pre_game', 9]],
@@ -349,4 +349,8 @@ test('best lineup: ties keep players where they are, then fill empty slots', () 
   const plan = model.bestLineup(l, OPT_NOW);
   assert.deepEqual(plain(plan.starters), ['pg', 'sg', 'c'], 'a player with no games still beats an empty slot');
   assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.from, c.to])), [['c', 'BN', 'C']]);
+});
+
+test('score tiers: green from 24, yellow from 15, red below', () => {
+  assert.deepEqual([24, 30, 23.99, 15, 14.99, 0, -2].map(model.scoreTier), ['green', 'green', 'yellow', 'yellow', 'red', 'red', 'red']);
 });

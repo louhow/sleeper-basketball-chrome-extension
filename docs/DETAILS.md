@@ -34,8 +34,8 @@ Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave
 - A starter with a finished game that can still be locked is worth at least that game's score.
 - Lineup: tries every way to fit the movable players into the starting slots and keeps the highest total, so scarce slots go to the players who can only fill them. Ties keep the most players where they are, then put players in their most specific slot.
 - Locked-in players and players in a game right now stay put.
-- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The dialog lists each one in red, and the button reads "Apply and lose N pts".
-- Good scores: when a lost score met or beat that game's projection, the row says "Beat proj" and Apply stays disabled until you tick "Bench … anyway".
+- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The row notes it ("Gives up 12.42 · Tue vs OKC").
+- Green scores (24+): giving one up turns the row red, explains it at the top, and keeps Apply ("Apply and lose N pts") disabled until you tick "Bench … anyway".
 - Apply works the plan out again first; if a game tipped off meanwhile and the plan changed, it shows the new plan instead of saving. The lineup saves in one `update_matchup_leg` (in season) or `roster_update_starters`, leaving Lock-In picks untouched.
 - The top of the dialog shows the starters' projected points per game now and after the changes.
 - The dialog's "How it picks" label shows these rules on hover or focus.
@@ -57,7 +57,7 @@ Rank comes from `roster_standings`; before any games are played, it falls back t
 Clicking a player's name or headshot on the Team or Matchup tab, or a player on the Players or Trend tab (instead of Sleeper's own NBA card), opens a card laid out like Sleeper's NFL player card:
 
 - Hero in team colors: owner, age, height, weight, experience, college, and rankings (position and overall rank from the latest season with stats, plus rostered and started %).
-- Game logs per season (tabs): projected and actual fantasy points with the league's scoring, minutes, box score and shooting, shaded like Sleeper's tables. The current season lists upcoming games with projections.
+- Game logs per season (tabs): projected and actual fantasy points with the league's scoring, minutes, box score and shooting, shaded like Sleeper's tables. Fantasy points are colored like the mobile app's score log: green 24+, yellow 15+, red below (thresholds observed in the app, not from the API). The current season lists upcoming games with projections.
 - Career: one row per season with fantasy points, position rank, per-game averages and shooting.
 - Transaction history in this league (logged in), latest news, and the team's depth chart.
 

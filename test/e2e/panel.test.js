@@ -913,7 +913,7 @@ test('sidebar: from a Matchup tab, an NBA league opens on its Matchup tab', asyn
   documentBody = LOGGED_OUT;
 });
 
-test('optimize lineup: proposes changes, flags a lost score, and saves only once applied', async () => {
+test('optimize lineup: proposes changes, guards green scores, and saves only once applied', async () => {
   documentBody = LOGGED_IN;
   sleeper.rosters = null;
   await startMidWeek();
@@ -922,8 +922,8 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   const league = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}`)).json();
   const util = league.roster_positions.filter((p) => p !== 'BN').indexOf('UTIL');
   const victim = leg.starters[util];
-  // What the victim's finished game is worth under the league's scoring.
-  const lost = (0.5 * league.scoring_settings.pts).toFixed(2).replace('.', '\\.');
+  // Stat points that score exactly `fpts` fantasy points under the league's scoring.
+  const statPts = (fpts) => fpts / league.scoring_settings.pts;
   // A bench player with games left after their first (finished) one becomes a must-start.
   const { data } = await (await fetch('https://sleeper.com/graphql', {
     method: 'POST',
@@ -933,11 +933,12 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   const gamesOf = (team) => data.scores.filter((g) => [g.metadata?.home_team?.team, g.metadata?.away_team?.team].includes(team)).length;
   const players = await (await fetch('https://api.sleeper.app/v1/players/nba')).json();
   const placed = new Set([...leg.starters, ...(myRoster.taxi || []), ...(myRoster.reserve || [])]);
-  const star = myRoster.players.find((id) => !placed.has(id) && gamesOf(players[id].team) >= 2);
-  // The UTIL starter's finished game scored a little and they're projected nothing after it.
+  const bench = myRoster.players.filter((id) => !placed.has(id) && gamesOf(players[id].team) >= 2);
+  const star = bench[0];
+  // The UTIL starter scored a little in their finished game and is projected nothing after it.
   sleeper.projections = (rows) => rows.map((r) => {
-    if (r.player_id === star) return { ...r, stats: { pts: 99 } };
-    if (r.player_id === victim) return { ...r, stats: { pts: sleeper.finished.has(r.game_id) ? 0.5 : 0 } };
+    if (r.player_id === star) return { ...r, stats: { pts: statPts(50) } };
+    if (r.player_id === victim) return { ...r, stats: { pts: sleeper.finished.has(r.game_id) ? statPts(3) : 0 } };
     return r;
   });
   await page.reload();
@@ -960,14 +961,10 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   assert.match(await page.locator(dialog('.how-tip')).innerText(), /^How it picks:\n1\. Every player gets a number/);
   await page.screenshot({ path: `${OUT}optimize-how.png` });
   await page.mouse.move(0, 0);
-  const victimRow = page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name });
-  assert.equal(await victimRow.count(), 1, 'the benched UTIL starter is flagged');
-  assert.match(await victimRow.textContent(), new RegExp(`Loses ${lost} · \\w{3} (vs|@) \\w+ Beat proj`));
-  assert.match(await page.locator(dialog('.lose-banner')).textContent(), new RegExp(`${players[victim].full_name}.* a finished game you could still lock in`));
-  const apply = page.locator(dialog('[data-action="apply-lineup"]'));
-  assert.match(await apply.textContent(), /^Apply and lose \d+\.\d\d pts$/);
-  // Mid-week stats stand in from projections, so every lost score met its projection: it takes the tick box.
-  assert.equal(await apply.isDisabled(), true, 'giving up a good score needs the tick box');
+  // A small score given up is noted on its row, without an alert.
+  const victimRow = page.locator(dialog('.op-row')).filter({ hasText: players[victim].full_name });
+  assert.match(await victimRow.textContent(), /Gives up 3\.00 · \w{3} (vs|@) \w+/);
+  assert.equal(await victimRow.evaluate((el) => el.classList.contains('losing')), false);
   assert.equal(await page.locator(dialog('.op-row')).filter({ hasText: players[star].full_name }).count(), 1, 'the must-start comes in');
   await page.screenshot({ path: `${OUT}optimize-dialog.png` });
 
@@ -985,9 +982,25 @@ test('optimize lineup: proposes changes, flags a lost score, and saves only once
   await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
   assert.equal(sleeper.mutations.length, before, 'nothing saved on cancel');
 
+  // Now the UTIL starter's finished game was green (24+) and every bench player is a must-start.
+  sleeper.projections = (rows) => rows.map((r) => {
+    if (bench.includes(r.player_id)) return { ...r, stats: { pts: statPts(50) } };
+    if (r.player_id === victim) return { ...r, stats: { pts: sleeper.finished.has(r.game_id) ? statPts(30) : 0 } };
+    return r;
+  });
+  await page.reload();
   await page.locator(panel('button.optimize')).click();
+  await page.locator(dialog('.lose-banner')).waitFor();
+  assert.match(await page.locator(dialog('.lose-banner')).textContent(), new RegExp(players[victim].full_name));
+  // Big games earn scoring bonuses too, so the score is at least what was set.
+  const given = Number((await page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name }).textContent()).match(/Gives up (\d+\.\d\d)/)[1]);
+  assert.ok(given >= 24, `a green score (${given})`);
+  const apply = page.locator(dialog('[data-action="apply-lineup"]'));
+  assert.match(await apply.textContent(), /^Apply and lose \d+\.\d\d pts$/);
+  assert.equal(await apply.isDisabled(), true, 'giving up a green score needs the tick box');
+  await page.screenshot({ path: `${OUT}optimize-green.png` });
   await page.locator(dialog('[data-op-ack]')).check();
-  await page.locator(dialog('[data-action="apply-lineup"]')).click();
+  await apply.click();
   await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
   await page.locator(panel('.notice.ok')).waitFor();
   const saved = sleeper.mutations.slice(before);

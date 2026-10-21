@@ -1536,16 +1536,6 @@ button.optimize:hover:not(:disabled) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.beat {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: rgba(0, 206, 184, 0.16);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
 .op-fixed {
   margin: 12px 4px 0;
   color: var(--muted);
@@ -1876,6 +1866,10 @@ h2.pc-name {
   background: rgba(255, 255, 255, 0.07);
   font-weight: 800;
 }
+/* Fantasy points by score tier (model.scoreTier), in the stat tables' heat colors. */
+.pc-table td.fpts.green { background: rgba(84, 132, 100, 0.75); }
+.pc-table td.fpts.yellow { background: rgba(128, 122, 78, 0.75); }
+.pc-table td.fpts.red { background: rgba(150, 72, 96, 0.75); }
 .pc-table td.dim {
   color: var(--muted);
 }

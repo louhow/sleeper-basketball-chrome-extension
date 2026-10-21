@@ -13,7 +13,7 @@
     '3. It tries every way to fit your players into the starting slots and keeps the lineup whose numbers add up highest. Players who fit only one slot (like a pure C) end up there, and versatile players fill G, F and UTIL.',
     '4. Locked-in players, and anyone in a game right now, stay where they are.',
     '5. When two lineups add up the same, it keeps the one that moves the fewest players.',
-    '6. Benching a starter whose finished game you could still lock throws that score away, so it warns you. If that score beat its projection, you have to confirm it.',
+    '6. Benching a starter whose finished game you could still lock throws that score away. The row says so, and if it was a green score (24 or more) you have to confirm it.',
   ].join('\n');
 
   const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
@@ -24,16 +24,16 @@
     const { plan } = m;
     const name = (id) => s.players[id]?.name || `Player #${id}`;
     const how = `<span class="how" tabindex="0" aria-describedby="how-tip">How it picks<span class="how-tip" id="how-tip" role="tooltip">${esc(HOW)}</span></span>`;
-    const lost = plan.changes.filter((c) => c.lost);
-    const good = lost.filter((c) => c.goodScore);
-    const lostTotal = lost.reduce((sum, c) => sum + c.lost.actual, 0);
+    // Only a green score is worth stopping for; smaller ones are noted on their row.
+    const good = plan.changes.filter((c) => c.goodScore);
+    const goodTotal = good.reduce((sum, c) => sum + c.lost.actual, 0);
     const blocked = good.length > 0 && !m.ack;
-    const warning = lost.length ? `<div class="lose-banner" role="alert">
-        <p>${names(lost.map((c) => `<b>${esc(name(c.id))}</b>`))} ${lost.length > 1 ? 'have' : 'has'} a finished game you could still lock in.
-        Benching them gives up ${f2(lostTotal)} pts, since bench players can't lock in.</p>
-        ${good.length ? `<label class="ack"><input type="checkbox" data-op-ack ${m.ack ? 'checked' : ''} ${m.saving ? 'disabled' : ''}>
-          <span>Bench ${names(good.map((c) => esc(shortName(s.players[c.id]))))} anyway, though ${good.length > 1 ? 'their scores' : 'that score'} beat projection</span>
-        </label>` : ''}
+    const warning = good.length ? `<div class="lose-banner" role="alert">
+        <p>${names(good.map((c) => `<b>${esc(name(c.id))}</b>`))} scored ${good.length > 1 ? 'green games you could still lock in' : `${f2(good[0].lost.actual)} in a game you could still lock in`}.
+        Bench players can't lock in, so benching them gives up ${f2(goodTotal)} pts.</p>
+        <label class="ack"><input type="checkbox" data-op-ack ${m.ack ? 'checked' : ''} ${m.saving ? 'disabled' : ''}>
+          <span>Bench ${names(good.map((c) => esc(shortName(s.players[c.id]))))} anyway</span>
+        </label>
       </div>` : '';
     const fixed = plan.fixed.length ? `<p class="op-fixed">Staying put: ${plan.fixed.map((f) =>
       `${esc(shortName(s.players[f.id]))} (${f.reason === 'locked' ? 'locked in' : 'playing now'})`).join(', ')}</p>` : '';
@@ -44,7 +44,7 @@
         ${plan.changes.map((c) => row(s, c)).join('')}
         ${fixed}`
       : `${summary(plan)}<p class="msg">This is already your best lineup for week ${esc(s.week)}.</p>${fixed}`;
-    const apply = lost.length ? `Apply and lose ${f2(lostTotal)} pts` : 'Apply changes';
+    const apply = good.length ? `Apply and lose ${f2(goodTotal)} pts` : 'Apply changes';
     return dialog('Optimize Lineup', `Week ${s.week}`, `
       <div class="dialog-body">
         ${dialogErrors(m.errors)}
@@ -52,7 +52,7 @@
       </div>
       <footer class="dialog-foot op-foot">
         <button data-action="close-modal" ${m.saving ? 'disabled' : ''}>${plan.changes.length ? 'Cancel' : 'Close'}</button>
-        ${plan.changes.length ? `<button class="primary${lost.length ? ' risky' : ''}" data-action="apply-lineup" ${m.saving || blocked ? 'disabled' : ''}
+        ${plan.changes.length ? `<button class="primary${good.length ? ' risky' : ''}" data-action="apply-lineup" ${m.saving || blocked ? 'disabled' : ''}
           ${blocked ? 'title="Tick the box above to confirm giving up that score"' : ''}>${m.saving ? 'Saving…' : esc(apply)}</button>` : ''}
       </footer>`, how);
   }
@@ -71,11 +71,10 @@
   function row(s, c) {
     const p = s.players[c.id] || { name: `Player #${c.id}`, positions: [] };
     const days = playerDays(s.weeks[s.week], p.team, c.id);
-    const beat = c.goodScore ? ` <span class="beat" title="Scored ${f2(c.lost.actual)} against a ${f2(c.lost.proj)} projection">Beat proj</span>` : '';
     const sub = c.lost
-      ? `<span class="sub lose">Loses ${f2(c.lost.actual)} · ${esc(gameText(c.lost))}${beat}</span>`
+      ? `<span class="sub${c.goodScore ? ' lose' : ''}">Gives up ${f2(c.lost.actual)} · ${esc(gameText(c.lost))}</span>`
       : `<span class="sub">${esc(nextGame(days))}</span>`;
-    return `<div class="op-row${c.lost ? ' losing' : ''}${c.to === 'BN' ? ' out' : ''}">
+    return `<div class="op-row${c.goodScore ? ' losing' : ''}${c.to === 'BN' ? ' out' : ''}">
       <span class="op-move">${slotBadge(c.from)}<span class="arrow" aria-label="to">→</span>${slotBadge(c.to)}</span>
       <img class="headshot" src="${headshot(c.id)}" alt="" data-player="${esc(c.id)}">
       <span class="dp-info">

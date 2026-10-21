@@ -4,6 +4,7 @@
 (globalThis.SNP ||= {}).card = (() => {
   const { esc, f2, teamLogo, shortName } = globalThis.SNP.ui;
   const { scoreStats } = globalThis.SNP.scoring;
+  const { scoreTier } = globalThis.SNP.model;
   const CDN = 'https://sleepercdn.com';
 
   // NBA team nicknames and primary colors, for the hero ("KINGS #9").
@@ -210,7 +211,7 @@
         return `<tr>
           <td class="dim">${dash(r.week)}</td><td class="dim">${md(r.date)}</td><td class="opp">${r.away ? '@' : ''}${esc(r.opp || '')}</td>
           <td class="dim">${r.proj != null ? f2(r.proj) : '-'}</td>
-          <td class="fpts">${r.played ? f2(r.fpts) : '-'}</td>
+          <td class="fpts${r.played ? ` ${scoreTier(r.fpts)}` : ''}">${r.played ? f2(r.fpts) : '-'}</td>
           ${cell('min')}${cell('pts')}${cell('reb')}${cell('ast')}${cell('stl')}${cell('blk')}${cell('to')}
           ${ratio('fgm', 'fga', 'fg')}${ratio('tpm', 'tpa', 'tp')}${ratio('ftm', 'fta', 'ft')}
         </tr>`;

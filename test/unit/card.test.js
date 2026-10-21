@@ -42,3 +42,15 @@ test('labels: NBA seasons span two years, heights in feet and inches', () => {
   assert.equal(card.height('79'), '6\'7"');
   assert.equal(card.height(null), '-');
 });
+
+test('game log colors fantasy points by score tier', () => {
+  const game = (id, date, pts) => ({ game_id: id, date, week: 1, opponent: 'GSW', stats: { pts } });
+  const s = {
+    modal: { kind: 'player', playerId: 'p1', season: 2026 },
+    league: { season: '2026', scoring_settings: { pts: 1 } },
+    players: { p1: { name: 'Test Player', positions: ['PG'], team: 'LAL' } },
+    cards: { p1: { seasons: [2026], logs: { 2026: { stats: { 1: [game('a', '2026-10-21', 30), game('b', '2026-10-22', 18), game('c', '2026-10-23', 9)] } } } } },
+  };
+  const tiers = [...card.render(s).matchAll(/<td class="fpts ([a-z]+)">([\d.]+)</g)].map((m) => [m[2], m[1]]);
+  assert.deepEqual(tiers, [['30.00', 'green'], ['18.00', 'yellow'], ['9.00', 'red']]);
+});
