@@ -139,6 +139,8 @@ const sleeper = {
   finished: new Set(),
   // When set, it is week 1 of the regular season and no game has tipped off yet.
   beforeTipoff: false,
+  // When set, rewrites the weekly projection rows (and so mid-week stats, which stand in from them).
+  projections: null,
 };
 
 // Picks each team's first game of week 1 up front, since the page loads scores
@@ -303,11 +305,17 @@ before(async () => {
     const res = await route.fetch();
     return route.fulfill({ response: res, json: { ...(await res.json()), season_type: 'regular', week: 1, display_week: 1 } });
   });
+  await context.route(/api\.sleeper\.app\/projections\/nba\/\d+\/\d+/, async (route) => {
+    if (!sleeper.projections) return route.continue();
+    const res = await route.fetch();
+    return route.fulfill({ response: res, json: sleeper.projections(await res.json()) });
+  });
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
     if (sleeper.beforeTipoff) return route.fulfill({ json: [] });
     if (!sleeper.midWeek) return route.continue();
     const url = route.request().url().replace('/stats/', '/projections/');
-    const projections = await (await fetch(url)).json();
+    const raw = await (await fetch(url)).json();
+    const projections = sleeper.projections ? sleeper.projections(raw) : raw;
     const stats = projections.filter((p) => sleeper.finished.has(p.game_id)).map((p) => ({ ...p, category: 'stat' }));
     return route.fulfill({ json: stats });
   });
@@ -900,5 +908,82 @@ test('sidebar: from a Matchup tab, an NBA league opens on its Matchup tab', asyn
   await page.locator('[data-sport=nba]').click();
   assert.equal(new URL(page.url()).pathname, `/leagues/${LEAGUE}`);
   assert.deepEqual(await page.evaluate(() => window.__sleeperNav), ['nba']);
+  documentBody = LOGGED_OUT;
+});
+
+test('optimize lineup: proposes changes, flags a lost score, and saves only once applied', async () => {
+  documentBody = LOGGED_IN;
+  sleeper.rosters = null;
+  await startMidWeek();
+  const myRoster = await openMyTeam(TEAM_URL);
+  const leg = sleeper.legs[1].find((l) => l.roster_id === myRoster.roster_id);
+  const league = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}`)).json();
+  const util = league.roster_positions.filter((p) => p !== 'BN').indexOf('UTIL');
+  const victim = leg.starters[util];
+  // What the victim's finished game is worth under the league's scoring.
+  const lost = (0.5 * league.scoring_settings.pts).toFixed(2).replace('.', '\\.');
+  // A bench player with games left after their first (finished) one becomes a must-start.
+  const { data } = await (await fetch('https://sleeper.com/graphql', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query: 'query scores { scores(sport: "nba", season_type: "regular", season: "2026", week: 1) { game_id metadata } }' }),
+  })).json();
+  const gamesOf = (team) => data.scores.filter((g) => [g.metadata?.home_team?.team, g.metadata?.away_team?.team].includes(team)).length;
+  const players = await (await fetch('https://api.sleeper.app/v1/players/nba')).json();
+  const placed = new Set([...leg.starters, ...(myRoster.taxi || []), ...(myRoster.reserve || [])]);
+  const star = myRoster.players.find((id) => !placed.has(id) && gamesOf(players[id].team) >= 2);
+  // The UTIL starter's finished game scored a little and they're projected nothing after it.
+  sleeper.projections = (rows) => rows.map((r) => {
+    if (r.player_id === star) return { ...r, stats: { pts: 99 } };
+    if (r.player_id === victim) return { ...r, stats: { pts: sleeper.finished.has(r.game_id) ? 0.5 : 0 } };
+    return r;
+  });
+  await page.reload();
+  await page.locator(panel('.taxi-head .hint')).waitFor({ timeout: 30000 });
+
+  // Offered on your own team only.
+  await page.locator(panel('button.optimize')).waitFor();
+  const other = sleeper.rosters.find((r) => r.roster_id !== myRoster.roster_id);
+  await page.locator(panel('select')).selectOption(String(other.roster_id));
+  await page.locator(panel('button.optimize')).waitFor({ state: 'detached' });
+  await page.locator(panel('select')).selectOption(String(myRoster.roster_id));
+
+  const before = sleeper.mutations.length;
+  await page.locator(panel('button.optimize')).click();
+  await page.locator(dialog('.op-row')).first().waitFor();
+  assert.match(await page.locator(dialog('.how')).getAttribute('title'), /^How it picks:\n1\. Every player gets a number/);
+  const victimRow = page.locator(dialog('.op-row.losing')).filter({ hasText: players[victim].full_name });
+  assert.equal(await victimRow.count(), 1, 'the benched UTIL starter is flagged');
+  assert.match(await victimRow.textContent(), new RegExp(`Loses ${lost} from`));
+  assert.match(await page.locator(dialog('.lose-banner')).textContent(), new RegExp(`${players[victim].full_name}.* a finished game you could still lock in`));
+  assert.match(await page.locator(dialog('[data-action="apply-lineup"]')).textContent(), /^Apply and lose \d+\.\d\d pts$/);
+  assert.equal(await page.locator(dialog('.op-row')).filter({ hasText: players[star].full_name }).count(), 1, 'the must-start comes in');
+  await page.screenshot({ path: `${OUT}optimize-dialog.png` });
+
+  // Dismissing changes nothing.
+  await page.locator(dialog('.op-foot button[data-action="close-modal"]')).click();
+  await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
+  assert.equal(sleeper.mutations.length, before, 'nothing saved on cancel');
+
+  await page.locator(panel('button.optimize')).click();
+  await page.locator(dialog('[data-action="apply-lineup"]')).click();
+  await page.locator(dialog('.modal')).waitFor({ state: 'detached' });
+  await page.locator(panel('.notice.ok')).waitFor();
+  const saved = sleeper.mutations.slice(before);
+  assert.equal(saved.length, 1, 'one lineup save');
+  assert.match(saved[0].query, /mutation update_matchup_leg/);
+  assert.deepEqual(saved[0].variables, {}, 'existing locks are left alone');
+  const starters = JSON.parse(saved[0].query.match(/starters: (\[[^\]]*\])/)[1]);
+  assert.ok(starters.includes(star) && !starters.includes(victim));
+  assert.match(await shadowText('.notice.ok'), /^Saved: (\d+ lineup changes|.*to bench)$/);
+  await page.screenshot({ path: `${OUT}optimize-saved.png` });
+
+  // Applied again, the lineup is already the best one.
+  await page.locator(panel('.notice.ok')).waitFor({ state: 'detached', timeout: 5000 });
+  await page.locator(panel('button.optimize')).click();
+  assert.match(await page.locator(dialog('.dialog-body')).textContent(), /already your best lineup/);
+  await page.keyboard.press('Escape');
+  sleeper.projections = null;
+  sleeper.midWeek = false;
   documentBody = LOGGED_OUT;
 });

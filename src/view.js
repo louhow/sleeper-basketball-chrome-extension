@@ -21,9 +21,15 @@
     const options = (s.rosters || [])
       .map((r) => `<option value="${r.roster_id}" ${r.roster_id === s.rosterId ? 'selected' : ''}>${esc(teamName(s, r))}</option>`)
       .join('');
+    // Only on the owner's editable Team tab, once the week's games are in.
+    const l = s.ready && s.page === 'team' && s.tab === 'page' && !s.error ? lineup(s) : null;
+    const optimize = l?.editable && l.week
+      ? `<button class="optimize" data-action="optimize" title="Propose the best starting lineup for this week" ${s.saving ? 'disabled' : ''}>Optimize lineup</button>`
+      : '';
     return `<nav class="toolbar">
       <div class="tabs" role="tablist">${tab('page', PAGES[s.page] || 'Team')}${tab('api', `API calls <span class="count">${log.length}</span>`)}</div>
       <div class="tools">
+        ${optimize}
         ${options ? `<select data-action="roster" aria-label="Team to show">${options}</select>` : ''}
         <button class="icon" data-action="refresh" title="Refetch everything" aria-label="Refresh">↻</button>
       </div>

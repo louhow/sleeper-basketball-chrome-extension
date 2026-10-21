@@ -257,3 +257,90 @@ test('IR players come off into an open spot only when the active roster has room
   assert.deepEqual(plain(model.applyMove('r:hurt', 'be:0', room)), { starters: room.starters, taxi: [], reserve: [] });
   assert.ok(!plain(model.swapTargets('r:hurt', irLineup(openUtil))).includes('s:4'), 'no room: the empty slot is off limits');
 });
+
+// A week where each player has their own team, so their games are theirs alone.
+// games: { [player]: [[gameId, date, status, proj, actual?], ...] }
+function optimizerWeek(games) {
+  const scores = Object.entries(games).flatMap(([team, list]) => list.map(([id, date, status]) =>
+    score(id, date, team, 'OPP', { status })));
+  const rows = (i) => Object.entries(games).flatMap(([pid, list]) => list.filter((g) => g[i] != null)
+    .map((g) => ({ player_id: pid, game_id: g[0], stats: { pts: g[i] } })));
+  return {
+    days: model.weekDays(scores),
+    gamesByTeam: model.gamesByTeam(scores),
+    proj: model.pointsByGame(rows(3), { pts: 1 }, scoring.scoreStats),
+    actual: model.pointsByGame(rows(4), { pts: 1 }, scoring.scoreStats),
+  };
+}
+const optimizerLineup = (slots, starters, bench, positions, games, locks = {}) => ({
+  slots, starters, bench, locks,
+  players: Object.fromEntries(Object.entries(positions).map(([id, pos]) => [id, { team: id, positions: pos }])),
+  week: optimizerWeek(games),
+});
+const OPT_NOW = Date.parse('2026-10-21T12:00:00Z');
+
+test('best lineup: scarce positions go to the players who can only fill them', () => {
+  // Putting the C/PF star at C (their first position) would leave F to the weaker wing.
+  const l = optimizerLineup(['C', 'F'], ['big', 'sf'], ['cen'], { big: ['C', 'PF'], cen: ['C'], sf: ['SF'] }, {
+    big: [['b1', '2026-10-22', 'pre_game', 40]],
+    cen: [['c1', '2026-10-22', 'pre_game', 30]],
+    sf: [['s1', '2026-10-22', 'pre_game', 25]],
+  });
+  const plan = model.bestLineup(l, OPT_NOW);
+  assert.deepEqual(plain(plan.starters), ['cen', 'big']);
+  assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.from, c.to])), [['cen', 'BN', 'C'], ['big', 'C', 'F'], ['sf', 'F', 'BN']]);
+  assert.deepEqual([plan.before, plan.after], [65, 70]);
+});
+
+test('best lineup: worth is projected points per game left, so no games left is worth nothing', () => {
+  const l = optimizerLineup(['UTIL'], ['two'], ['one', 'done'], { two: ['PG'], one: ['SG'], done: ['SF'] }, {
+    two: [['t1', '2026-10-22', 'pre_game', 20], ['t2', '2026-10-24', 'pre_game', 10]],
+    one: [['o1', '2026-10-23', 'pre_game', 16]],
+    done: [['d1', '2026-10-20', 'complete', 50, 48]],
+  });
+  const plan = model.bestLineup(l, OPT_NOW);
+  assert.deepEqual(plain(plan.starters), ['one']);
+  assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.perGame, c.gamesLeft])), [['one', 16, 1], ['two', 15, 2]]);
+});
+
+test('best lineup: benching a starter with a lockable finished game flags the lost score', () => {
+  const l = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
+    kj: [['k1', '2026-10-20', 'complete', 10, 12.5], ['k2', '2026-10-23', 'pre_game', 9]],
+    wing: [['w1', '2026-10-22', 'pre_game', 20]],
+  });
+  const plan = model.bestLineup(l, OPT_NOW);
+  const benched = plan.changes.find((c) => c.id === 'kj');
+  assert.equal(benched.to, 'BN');
+  assert.deepEqual([benched.lost.game.id, benched.lost.actual], ['k1', 12.5]);
+  assert.equal(plan.changes.find((c) => c.id === 'wing').lost, null, 'a bench player had nothing to lock');
+  // Worth at least the lockable score: a 12.5 finished game beats a 12 projection.
+  const close = optimizerLineup(['F'], ['kj'], ['wing'], { kj: ['SF', 'PF'], wing: ['SF'] }, {
+    kj: [['k1', '2026-10-20', 'complete', 10, 12.5], ['k2', '2026-10-23', 'pre_game', 9]],
+    wing: [['w1', '2026-10-22', 'pre_game', 12]],
+  });
+  assert.deepEqual(plain(model.bestLineup(close, OPT_NOW).changes), []);
+});
+
+test('best lineup: locked players and players in a game right now stay put', () => {
+  const l = optimizerLineup(['G', 'UTIL'], ['lock', 'live'], ['star', 'benchLive'], { lock: ['PG'], live: ['SG'], star: ['PG'], benchLive: ['SG'] }, {
+    lock: [['l1', '2026-10-20', 'complete', 5, 4]],
+    live: [['v1', '2026-10-21', 'in_game', 1]],
+    star: [['s1', '2026-10-22', 'pre_game', 50]],
+    benchLive: [['b1', '2026-10-21', 'in_game', 60]],
+  }, { lock: 'l1' });
+  const plan = model.bestLineup(l, OPT_NOW);
+  assert.deepEqual(plain(plan.starters), ['lock', 'live']);
+  assert.deepEqual(plain(plan.changes), []);
+  assert.deepEqual(plain(plan.fixed), [{ id: 'lock', reason: 'locked' }, { id: 'live', reason: 'live' }, { id: 'benchLive', reason: 'live' }]);
+});
+
+test('best lineup: ties keep players where they are, then fill empty slots', () => {
+  const l = optimizerLineup(['G', 'UTIL', 'C'], ['pg', 'sg', '0'], ['c'], { pg: ['PG'], sg: ['PG', 'SG'], c: ['C'] }, {
+    pg: [['p1', '2026-10-22', 'pre_game', 20]],
+    sg: [['g1', '2026-10-22', 'pre_game', 20]],
+    c: [],
+  });
+  const plan = model.bestLineup(l, OPT_NOW);
+  assert.deepEqual(plain(plan.starters), ['pg', 'sg', 'c'], 'a player with no games still beats an empty slot');
+  assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.from, c.to])), [['c', 'BN', 'C']]);
+});

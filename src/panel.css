@@ -1321,6 +1321,128 @@ ol.claims {
   width: 56px;
 }
 
+/* Optimize Lineup: the toolbar button and its confirmation dialog. */
+button.optimize {
+  background: rgba(0, 206, 184, 0.14);
+  color: var(--accent);
+  font-weight: 700;
+}
+button.optimize:hover:not(:disabled) {
+  background: rgba(0, 206, 184, 0.24);
+}
+.how {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 3px;
+  cursor: help;
+}
+.how::after {
+  content: " ⓘ";
+}
+.how:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.lose-banner {
+  margin: 4px 0 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 91, 110, 0.14);
+  color: #ffc2c9;
+  font-size: 13px;
+}
+.lose-banner p {
+  margin: 0;
+}
+.lose-banner p + p {
+  margin-top: 6px;
+}
+.lose-banner b {
+  color: var(--text);
+}
+.op-head,
+.op-row {
+  display: grid;
+  grid-template-columns: 112px 30px minmax(0, 1fr) 52px 36px;
+  align-items: center;
+  column-gap: 10px;
+}
+.op-head {
+  padding: 12px 12px 6px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.op-head span:nth-child(2) {
+  grid-column: 2 / 4;
+}
+.op-row {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+}
+.op-row.losing {
+  border: 1px solid rgba(255, 91, 110, 0.5);
+  border-radius: 10px;
+  background: rgba(255, 91, 110, 0.06);
+}
+.op-row .headshot {
+  width: 30px;
+  height: 30px;
+}
+.op-row .dp-pts {
+  font-weight: 700;
+}
+.op-row.out .dp-pts,
+.op-row.out .dp-gms {
+  color: var(--muted);
+}
+.op-move {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.op-move .slot {
+  width: 44px;
+  height: 30px;
+  font-size: 12px;
+}
+.op-move .arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sub.lose {
+  color: var(--danger);
+  font-weight: 700;
+}
+.op-fixed {
+  margin: 12px 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.op-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.op-foot button:not(.primary) {
+  padding: 12px 20px;
+  font-weight: 700;
+}
+.op-foot .primary {
+  min-width: 0;
+}
+button.primary.risky {
+  background: var(--danger);
+}
+button.primary.risky:hover:not(:disabled) {
+  background: #e84a5d;
+}
+
 /* Player names open the player card. */
 button.name,
 .mp-id .name button {

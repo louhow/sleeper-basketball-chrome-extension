@@ -57,6 +57,32 @@
       : `<span class="slot ${esc(cls)}"${style}>${esc(slot)}</span>`;
   }
 
+  // A player's next game this week, e.g. "Thu @ MIA 7:30pm".
+  function nextGame(days) {
+    const d = days.find((x) => x.game && x.game.status !== 'complete');
+    if (!d) return days.some((x) => x.game) ? 'No games left this week' : 'No games this week';
+    const time = d.game.status === 'in_game' ? 'Live' : d.game.start ? gameTime(d.game.start) : '';
+    return `${weekday(d.date)} ${d.home ? 'vs' : '@'} ${d.opponent}${time ? ` ${time}` : ''}`;
+  }
+
+  // A dialog over the page; the backdrop and ✕ close it. `extra` sits beside the title.
+  function dialog(title, description, body, extra = '') {
+    return `<div class="modal">
+      <div class="backdrop" data-action="close-modal"></div>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <header class="dialog-head">
+          <div><h2 id="dialog-title">${esc(title)}${extra}</h2>${description ? `<div class="sub">${esc(description)}</div>` : ''}</div>
+          <button class="icon close" data-action="close-modal" aria-label="Close">✕</button>
+        </header>
+        ${body}
+      </div>
+    </div>`;
+  }
+
+  function dialogErrors(list) {
+    return list?.length ? `<div class="dialog-errors" role="alert">${list.map((e) => `<p>${esc(e)}</p>`).join('')}</div>` : '';
+  }
+
   function weekNav(s, week) {
     const range = week?.days.length ? dateRange(week.days[0], week.days.at(-1)) : '';
     return `<div class="week-nav">
@@ -152,6 +178,6 @@
   return {
     reserveRule,
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
-    gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, owns,
+    gameTime, weekday, nextGame, dialog, dialogErrors, slotBadge, weekNav, notice, lineup, taxiRule, owns,
   };
 })();

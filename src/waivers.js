@@ -2,42 +2,20 @@
 // the owner's pending claims (edit a bid or cancel). Pure: state -> HTML.
 (globalThis.SNP ||= {}).waivers = (() => {
   const { playerDays, lockInDefault, rosterRoom, faabLeft, sortClaims, FAAB } = globalThis.SNP.model;
-  const { esc, f2, headshot, positions, injuryTag, slotBadge, lineup, weekday, gameTime, owns } = globalThis.SNP.ui;
+  const { esc, f2, headshot, positions, injuryTag, slotBadge, lineup, nextGame, dialog, dialogErrors, owns } = globalThis.SNP.ui;
 
   function render(s) {
     const m = s.modal;
     if (!m) return '';
-    const body = m.kind === 'claims' ? claimsDialog(s, m) : bidDialog(s, m);
-    return `<div class="modal">
-      <div class="backdrop" data-action="close-modal"></div>
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">${body}</div>
-    </div>`;
+    return m.kind === 'claims' ? claimsDialog(s, m) : bidDialog(s, m);
   }
 
   const myRoster = (s) => s.rosters?.find((r) => owns(s, r)) ?? null;
-
-  function head(title, description) {
-    return `<header class="dialog-head">
-      <div><h2 id="dialog-title">${esc(title)}</h2>${description ? `<div class="sub">${esc(description)}</div>` : ''}</div>
-      <button class="icon close" data-action="close-modal" aria-label="Close">✕</button>
-    </header>`;
-  }
-
-  function errors(list) {
-    return list?.length ? `<div class="dialog-errors" role="alert">${list.map((e) => `<p>${esc(e)}</p>`).join('')}</div>` : '';
-  }
 
   // The current week's games for a player, for projections and "next game".
   function daysOf(s, id) {
     const week = s.weeks?.[s.currentWeek];
     return week ? playerDays(week, s.players[id]?.team, id) : [];
-  }
-
-  function nextGame(days) {
-    const d = days.find((x) => x.game && x.game.status !== 'complete');
-    if (!d) return days.some((x) => x.game) ? 'No games left this week' : 'No games this week';
-    const time = d.game.status === 'in_game' ? 'Live' : d.game.start ? gameTime(d.game.start) : '';
-    return `${weekday(d.date)} ${d.home ? 'vs' : '@'} ${d.opponent}${time ? ` ${time}` : ''}`;
   }
 
   const gamesLeft = (days) => days.filter((d) => d.game && d.game.status === 'pre_game').length;
@@ -73,8 +51,8 @@
     const [title, description] = !waiver ? ['Add Player', `Add ${p.name} to your roster`]
       : faab ? ['Make Waiver Bid', `Bid for ${p.name}`]
       : ['Make Waiver Claim', `${p.name} will be added to your roster once waiver clears`];
-    if (!s.ready) return `${head(title, description)}<p class="msg">Loading…</p>`;
-    if (!roster) return `${head(title, description)}<p class="msg">Log in to Sleeper with a team in this league to ${waiver ? 'bid' : 'add players'}.</p>`;
+    if (!s.ready) return dialog(title, description, '<p class="msg">Loading…</p>');
+    if (!roster) return dialog(title, description, `<p class="msg">Log in to Sleeper with a team in this league to ${waiver ? 'bid' : 'add players'}.</p>`);
 
     const room = rosterRoom(s.league, roster);
     const banner = room <= 0
@@ -101,9 +79,9 @@
       ...l.taxi.map((id) => row('TX', id)),
     ].join('');
 
-    return `${head(title, description)}
+    return dialog(title, description, `
       <div class="dialog-body">
-        ${errors(m.errors)}
+        ${dialogErrors(m.errors)}
         ${playerRow(s, 'BN', m.playerId)}
         <p class="banner">${esc(banner)}</p>
         ${bidForm}
@@ -112,7 +90,7 @@
       </div>
       <footer class="dialog-foot">
         <button class="primary" data-action="submit-claim" ${m.saving ? 'disabled' : ''}>${m.saving ? 'Saving…' : esc(title)}</button>
-      </footer>`;
+      </footer>`);
   }
 
   function claimsDialog(s, m) {
@@ -120,7 +98,7 @@
     const faab = s.league?.settings?.waiver_type === FAAB;
     const claims = sortClaims(s.claims || []);
     const description = roster && faab ? `$${faabLeft(s.league, roster)} remaining · waiver position ${roster.settings?.waiver_position ?? '–'}` : '';
-    if (!roster) return `${head('Waiver Claims', '')}<p class="msg">Log in to Sleeper to see your claims.</p>`;
+    if (!roster) return dialog('Waiver Claims', '', '<p class="msg">Log in to Sleeper to see your claims.</p>');
     const player = (id, sign) => {
       const p = s.players[id] || { name: `Player #${id}`, positions: [] };
       return `<div class="cp ${sign === '+' ? 'add' : 'drop'}">
@@ -145,13 +123,13 @@
           <button class="danger" data-claim-cancel="${esc(c.transaction_id)}" ${m.saving ? 'disabled' : ''}>Cancel</button>
         </div>`}
       </li>`).join('');
-    return `${head('Waiver Claims', description)}
+    return dialog('Waiver Claims', description, `
       <div class="dialog-body">
-        ${errors(m.errors)}
+        ${dialogErrors(m.errors)}
         ${s.claims == null ? '<p class="msg">Loading…</p>'
           : items ? `<ol class="claims">${items}</ol>`
           : '<p class="msg">No pending claims. Tap W next to a player on the Players tab to bid.</p>'}
-      </div>`;
+      </div>`);
   }
 
   return { render, myRoster };

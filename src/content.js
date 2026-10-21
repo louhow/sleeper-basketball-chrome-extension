@@ -4,7 +4,7 @@
 // On every page of an NBA league it also answers Sleeper's waiver and add
 // buttons (see page-hook.js) with a bid dialog.
 (() => {
-  const { createApi, view, model, scoring, ui, waivers, card } = globalThis.SNP;
+  const { createApi, view, model, scoring, ui, waivers, optimize, card } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
   const PANEL_PAGES = new Set(['team', 'matchup']);
   const PLAYERS_PATH = '/v1/players/nba';
@@ -89,6 +89,7 @@
       claims: null, // the logged-in owner's pending waiver claims
       cards: {}, // player card data by player id, kept for the session
       // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving } | { kind: 'player', playerId, season }
+      // | { kind: 'optimize', plan, errors, saving }
       modal: null,
     };
     let destroyed = false;
@@ -154,7 +155,8 @@
       // Scrolled areas keep their place across re-renders.
       const scrolls = [...layerRoot.querySelectorAll('.dialog-body, [data-scroll]')].map((el) => [el.dataset.scroll || 'dialog', el.scrollTop]);
       const focused = layerShadow.activeElement?.matches?.('[data-bid]');
-      const dialog = state.modal?.kind === 'player' ? card.render(state) : waivers.render(state);
+      const kind = state.modal?.kind;
+      const dialog = kind === 'player' ? card.render(state) : kind === 'optimize' ? optimize.render(state) : waivers.render(state);
       layerRoot.innerHTML = `<div class="page-layer">${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
       for (const [key, top] of scrolls) {
         const el = key === 'dialog' ? layerRoot.querySelector('.dialog-body') : layerRoot.querySelector(`[data-scroll="${key}"]`);
@@ -530,7 +532,7 @@
         if (state.modal === m) state.modal = m.kind === 'claims' ? { ...m, saving: false } : null;
         flash(okText);
       } catch (err) {
-        console.error('[sleeper-nba-panel] waiver save failed', err);
+        console.error('[sleeper-nba-panel] save failed', err);
         m.errors = [String(err.message || err)];
       } finally {
         m.saving = false;
@@ -687,6 +689,38 @@
       );
     }
 
+    // Proposes the best lineup for the shown week; nothing saves until it's applied.
+    function openOptimize() {
+      const lineup = ui.lineup(state);
+      if (state.saving || !lineup?.editable || !lineup.week) return;
+      state.swap = null;
+      state.lockConfirm = null;
+      state.notice = null;
+      state.modal = { kind: 'optimize', plan: model.bestLineup(lineup, Date.now()), errors: [], saving: false };
+      schedule();
+    }
+
+    // Saves the proposed lineup in one write. Games can tip off while the
+    // dialog is open, so the plan is worked out again first; if it changed,
+    // the dialog shows the new one instead of saving something unseen.
+    function applyOptimize() {
+      const m = state.modal;
+      const lineup = ui.lineup(state);
+      if (m?.kind !== 'optimize' || m.saving || !lineup?.editable) return;
+      const plan = model.bestLineup(lineup, Date.now());
+      if (JSON.stringify(plan.starters) !== JSON.stringify(m.plan.starters) ||
+        JSON.stringify(plan.changes) !== JSON.stringify(m.plan.changes)) {
+        m.plan = plan;
+        m.errors = ['Games have tipped off since this opened. Review the updated changes.'];
+        return schedule();
+      }
+      // Names a few moves; past that, just the count, so the notice stays one line.
+      const moved = plan.changes.length > 3 ? `${plan.changes.length} lineup changes` : plan.changes
+        .map(({ id, to }) => `${ui.shortName(state.players[id] || { name: `Player #${id}` })} to ${to === 'BN' ? 'bench' : to}`)
+        .join(', ');
+      return modalSave(() => saveStarters(plan.starters), `Saved: ${moved}`);
+    }
+
     function pickSpot(ref) {
       if (state.saving) return;
       const lineup = ui.lineup(state);
@@ -735,6 +769,7 @@
       if (action === 'next' && state.week < state.maxWeek) setWeek(state.week + 1);
       if (action === 'refresh') loadLeague(true).catch(fail);
       if (action === 'claims') openClaims();
+      if (action === 'optimize') openOptimize();
     });
     root.addEventListener('change', (e) => {
       if (e.target.dataset.action !== 'roster') return;
@@ -801,6 +836,7 @@
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (action === 'close-modal') closeModal();
       if (action === 'submit-claim') submitClaim();
+      if (action === 'apply-lineup') applyOptimize();
     });
     layerRoot.addEventListener('input', (e) => {
       // Kept without a re-render so typing never loses focus.

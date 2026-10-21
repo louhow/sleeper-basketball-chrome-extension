@@ -22,6 +22,7 @@
         "src/view.js",
         "src/matchup.js",
         "src/waivers.js",
+        "src/optimize.js",
         "src/card.js",
         "src/content.js"
       ],

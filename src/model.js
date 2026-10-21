@@ -258,6 +258,108 @@
     };
   }
 
+  // Lineup optimizer. A player's worth as a starter is what they're projected
+  // to score per game over the games they have left this week (0 with none
+  // left). A starter whose finished game can still be locked is worth at least
+  // that game's score, which benching them gives up. Locked players and players
+  // in a game right now stay put.
+  const gameLive = (game, now) => game.status === 'in_game' ||
+    (game.status === 'pre_game' && game.start != null && game.start <= now);
+
+  function outlook(days, lockValue, starting, now) {
+    const st = lockState(days, lockValue, now);
+    const left = st.games.filter((d) => d.game.status === 'pre_game' && !gameLive(d.game, now));
+    const perGame = left.length ? left.reduce((sum, d) => sum + (d.proj ?? 0), 0) / left.length : 0;
+    // Only starters can lock, so only a starter's finished game is worth keeping.
+    const banked = starting && st.lockable ? st.current : null;
+    return {
+      perGame,
+      gamesLeft: left.length,
+      banked,
+      value: Math.max(perGame, banked?.actual ?? 0),
+      fixed: st.locked ? 'locked' : st.games.some((d) => gameLive(d.game, now)) ? 'live' : null,
+    };
+  }
+
+  // Slots that take fewer positions come first on a tie, so a pure center
+  // sits at C and UTIL stays open for anyone.
+  const slotSpecificity = (slot) => (OPEN_SLOTS.has(slot) ? 0 : SLOT_ACCEPTS[slot] ? 1 : 2);
+
+  // The starting lineup with the highest total worth, found by trying every
+  // way to fit the movable players into the open slots. Ties go to the lineup
+  // that moves the fewest players, then to players in their most specific slot.
+  function bestLineup(l, now = Date.now()) {
+    if (!l.week) return null;
+    const look = {};
+    const consider = (id, starting) => {
+      look[id] = outlook(playerDays(l.week, l.players[id]?.team, id), l.locks?.[id], starting, now);
+    };
+    l.starters.forEach((id) => id && id !== '0' && consider(id, true));
+    l.bench.forEach((id) => consider(id, false));
+
+    const fixed = [];
+    const open = [];
+    l.starters.forEach((id, i) => {
+      if (id && id !== '0' && look[id].fixed) fixed.push({ id, reason: look[id].fixed });
+      else open.push(i);
+    });
+    const benchFixed = l.bench.filter((id) => look[id].fixed);
+    fixed.push(...benchFixed.map((id) => ({ id, reason: look[id].fixed })));
+    const pool = [...l.starters.filter((id, i) => id && id !== '0' && open.includes(i)), ...l.bench.filter((id) => !benchFixed.includes(id))];
+
+    const slotOf = (i) => l.slots[i] ?? 'UTIL';
+    const weight = (id, i) => Math.round(look[id].value * 100) * 10000 +
+      (l.starters[i] === id ? 100 : 0) + slotSpecificity(slotOf(i));
+    // best(k, used): the best total for pool[k..] given the open slots already taken.
+    const memo = new Map();
+    function best(k, used) {
+      if (k === pool.length) return 0;
+      const key = k * 2 ** open.length + used;
+      if (memo.has(key)) return memo.get(key).total;
+      let pick = { total: best(k + 1, used), slot: -1 };
+      open.forEach((i, bit) => {
+        if (used & (1 << bit) || !fits(slotOf(i), l.players[pool[k]] || {})) return;
+        const total = weight(pool[k], i) + best(k + 1, used | (1 << bit));
+        if (total > pick.total) pick = { total, slot: bit };
+      });
+      memo.set(key, pick);
+      return pick.total;
+    }
+    best(0, 0);
+    const starters = l.starters.map((id, i) => (open.includes(i) ? '0' : id));
+    for (let k = 0, used = 0; k < pool.length; k++) {
+      const { slot } = memo.get(k * 2 ** open.length + used);
+      if (slot < 0) continue;
+      starters[open[slot]] = pool[k];
+      used |= 1 << slot;
+    }
+
+    const where = (list, id) => {
+      const i = list.indexOf(id);
+      return i < 0 ? 'BN' : slotOf(i);
+    };
+    const changes = [...new Set([...l.starters, ...starters])]
+      .filter((id) => id && id !== '0' && l.starters.indexOf(id) !== starters.indexOf(id))
+      .map((id) => {
+        const { perGame, gamesLeft, banked } = look[id];
+        const benched = !starters.includes(id);
+        return {
+          id,
+          from: where(l.starters, id),
+          to: where(starters, id),
+          perGame,
+          gamesLeft,
+          // Benching a starter whose finished game could still be locked throws that score away.
+          lost: benched && banked?.actual > 0 ? banked : null,
+        };
+      })
+      // Lineup order, then whoever goes to the bench.
+      .sort((a, b) => (starters.includes(a.id) ? starters.indexOf(a.id) : 100 + l.starters.indexOf(a.id)) -
+        (starters.includes(b.id) ? starters.indexOf(b.id) : 100 + l.starters.indexOf(b.id)));
+    const total = (list) => list.reduce((sum, id) => sum + (id && id !== '0' ? look[id].value : 0), 0);
+    return { starters, changes, fixed, before: total(l.starters), after: total(starters) };
+  }
+
   // Sleeper's win probability (ported from its web app): each side is a normal
   // distribution centred on its projection, tighter as the current score nears it.
   function erfc(x) {
@@ -349,7 +451,7 @@
   return {
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen, reserveEligible,
-    lockedGameId, lockState, winProbability, standingsRanks,
+    lockedGameId, lockState, bestLineup, winProbability, standingsRanks,
     FAAB, rosterRoom, faabLeft, claimError, sortClaims,
   };
 })();

@@ -25,6 +25,19 @@ These are ported from Sleeper's web app and match its help article:
 
 The projection follows Lock-In rules: an unlocked player scores their final game of the week, so that game's projection is the default.
 
+#### Optimize lineup
+
+The Team tab's **Optimize lineup** button (your own team, a week you can still edit) proposes the best starting lineup and shows every change in a dialog before anything saves.
+Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave the lineup as it was.
+
+- Worth: a player's projected points per game, averaged over the games they have left this week (0 with none left). Out games project 0, so injuries count.
+- A starter with a finished game that can still be locked is worth at least that game's score.
+- Lineup: tries every way to fit the movable players into the starting slots and keeps the highest total, so scarce slots go to the players who can only fill them. Ties keep the most players where they are, then put players in their most specific slot.
+- Locked-in players and players in a game right now stay put.
+- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The dialog lists each one in red, and the button reads "Apply and lose N pts".
+- Apply works the plan out again first; if a game tipped off meanwhile and the plan changed, it shows the new plan instead of saving. The lineup saves in one `update_matchup_leg` (in season) or `roster_update_starters`, leaving Lock-In picks untouched.
+- The dialog's "How it picks" label has a plain-text tooltip with these rules.
+
 ### Matchup
 
 - Both teams side by side: points, projection, win probability, record and standings rank, and how many starters are yet to play.
