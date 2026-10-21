@@ -354,3 +354,65 @@ test('best lineup: ties keep players where they are, then fill empty slots', () 
 test('score tiers: green from 24, yellow from 15, red below', () => {
   assert.deepEqual([24, 30, 23.99, 15, 14.99, 0, -2].map(model.scoreTier), ['green', 'green', 'yellow', 'yellow', 'red', 'red', 'red']);
 });
+
+test('cheapest assignment matches brute force on random matrices', () => {
+  // Deterministic pseudo-random numbers, so a failure always reproduces.
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const brute = (cost, row = 0, used = new Set()) => {
+    if (row === cost.length) return 0;
+    let best = Infinity;
+    cost[row].forEach((c, j) => {
+      if (used.has(j)) return;
+      used.add(j);
+      best = Math.min(best, c + brute(cost, row + 1, used));
+      used.delete(j);
+    });
+    return best;
+  };
+  for (let trial = 0; trial < 200; trial++) {
+    const n = 1 + Math.floor(rand() * 5);
+    const m = n + Math.floor(rand() * 3);
+    const cost = Array.from({ length: n }, () => Array.from({ length: m }, () => Math.floor(rand() * 20) - 10));
+    const cols = model.cheapestAssignment(cost);
+    assert.equal(new Set(cols).size, n, 'each row gets its own column');
+    assert.equal(cols.reduce((sum, j, i) => sum + cost[i][j], 0), brute(cost), JSON.stringify(cost));
+  }
+});
+
+const nfl = (slots, starters, bench, players, proj, played = {}) => ({
+  slots, starters, bench, proj, played,
+  players: Object.fromEntries(Object.entries(players).map(([id, p]) => [id, typeof p === 'string' ? { positions: [p] } : p])),
+});
+
+test('NFL best lineup: superflex goes to a QB only when that beats the flex options', () => {
+  // Two QBs: the second QB (18) beats the best remaining WR (12) at SUPER_FLEX, and the WR takes FLEX.
+  const l = nfl(['QB', 'WR', 'FLEX', 'SUPER_FLEX'], ['qb1', 'wr1', 'rb1', 'wr2'], ['qb2', 'wr3'],
+    { qb1: 'QB', qb2: 'QB', wr1: 'WR', wr2: 'WR', wr3: 'WR', rb1: 'RB' },
+    { qb1: 22, qb2: 18, wr1: 15, wr2: 12, wr3: 9, rb1: 8 });
+  const plan = model.bestNflLineup(l);
+  assert.deepEqual(plain(plan.starters), ['qb1', 'wr1', 'wr2', 'qb2']);
+  assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.from, c.to, c.proj])),
+    [['wr2', 'SUPER_FLEX', 'FLEX', 12], ['qb2', 'BN', 'SUPER_FLEX', 18], ['rb1', 'FLEX', 'BN', 8]]);
+  assert.deepEqual([plan.before, plan.after], [57, 67]);
+});
+
+test('NFL best lineup: kicked-off players stay put, ruled-out players are worth nothing', () => {
+  const l = nfl(['RB', 'WR'], ['rb1', 'wr1'], ['rb2', 'wr2'],
+    { rb1: 'RB', rb2: 'RB', wr1: 'WR', wr2: { positions: ['WR'], injury: 'Out' } },
+    { rb1: 5, rb2: 20, wr1: 6, wr2: 25 }, { rb1: true, rb2: false });
+  const plan = model.bestNflLineup(l);
+  assert.deepEqual(plain(plan.starters), ['rb1', 'wr1'], 'rb1 already played; wr2 is Out');
+  assert.deepEqual(plain(plan.fixed), [{ id: 'rb1', reason: 'played' }]);
+  assert.deepEqual(plain(plan.changes), []);
+  // Questionable players can start; the dialog highlights them.
+  l.players.wr2.injury = 'Questionable';
+  assert.deepEqual(plain(model.bestNflLineup(l).starters), ['rb1', 'wr2']);
+});
+
+test('NFL best lineup: a bye week projects nothing and IDP flex takes any defender', () => {
+  const l = nfl(['DL', 'IDP_FLEX', 'K'], ['dl1', 'lb1', 'k1'], ['db1', 'k2'],
+    { dl1: 'DL', lb1: 'LB', db1: 'DB', k1: 'K', k2: 'K' },
+    { dl1: 7, lb1: 6, db1: 9, k2: 8 });
+  assert.deepEqual(plain(model.bestNflLineup(l).starters), ['dl1', 'db1', 'k2'], 'k1 is on bye');
+});

@@ -117,6 +117,72 @@ const leagueNav = `<!doctype html><title>Sleeper</title>
   });
 </script>`;
 
+// Sleeper's own NFL Team tab, reduced to what Optimize lineup touches: the header's
+// WAIVER and TRADE buttons, and a Team component whose React-style props hold the
+// lineup and save actions, with one projection per roster row. updateMatchupLeg is
+// recorded instead of saved, and can be told to refuse.
+const NFL_TEAM_URL = `https://sleeper.com/leagues/${NFL_LEAGUE}/team`;
+const NFL_PLAYERS = {
+  qbA: ['Alpha QB', 'QB', 'KC', 22], rbPlayed: ['Early RB', 'RB', 'DET', 5], wrA: ['Alpha WR', 'WR', 'SEA', 9],
+  rbB: ['Beta RB', 'RB', 'NYJ', 7], wrB: ['Beta WR', 'WR', 'MIA', 8],
+  qbB: ['Beta QB', 'QB', 'LAR', 18, 'Questionable'], wrC: ['Gamma WR', 'WR', 'GB', 14],
+  teOut: ['Hurt TE', 'TE', 'NYG', 20, 'Out'], rbBye: ['Bye RB', 'RB', 'CHI', null],
+};
+const nflTeamTab = () => `<!doctype html><title>Sleeper</title>
+<style>
+  body { margin: 0; background: rgb(16, 33, 49); font-family: Lato, Arial, sans-serif; color: #fff; }
+  .user-tab-menu { width: 680px; margin: 40px; padding: 20px; background: rgb(36, 45, 60); border-radius: 12px; }
+  .user-tab-menu .row { display: flex; justify-content: space-between; align-items: center; }
+  .actions { display: flex; }
+  .btn-container { display: flex; flex-direction: column; align-items: center; width: 40px; height: 54px; margin-left: 16px; cursor: pointer; }
+  .btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 40px; background: rgb(58, 70, 91); }
+  .btn-text { margin-top: 4px; font-size: 10px; }
+  .team-roster-item { padding: 6px 0; }
+</style>
+<div class="user-tab-menu"><div class="row"><b>Lou Point Conversion</b><div class="actions">
+  <div class="btn-container space"><div class="btn">W</div><div class="btn-text">WAIVER</div></div>
+  <div class="btn-container space"><div class="btn">T</div><div class="btn-text">TRADE</div></div>
+</div></div></div>
+<div class="team-roster"></div>
+<script>
+  window.__nflSaves = [];
+  window.__nflFail = null;
+  const players = ${JSON.stringify(NFL_PLAYERS)};
+  const scoring = { rec_yd: 0.1 };
+  const team = {
+    memoizedProps: {
+      sport: 'nfl', leagueId: '${NFL_LEAGUE}', round: 7, rosterId: 4, isTeamOwner: true, disableEdit: false,
+      league: { status: 'in_season' },
+      roster: { roster_id: 4, players: Object.keys(players), reserve: [], taxi: [] },
+      hasTeamPlayedMap: { DET: 'complete' },
+      playersMap: Object.fromEntries(Object.entries(players).map(([id, [name, pos, nflTeam, , injury]]) => [id, {
+        first_name: name.split(' ')[0], last_name: name.split(' ')[1], position: pos, fantasy_positions: [pos], team: nflTeam, injury_status: injury || null,
+      }])),
+      updateMatchupLeg: async (...args) => {
+        window.__nflSaves.push(args);
+        if (window.__nflFail) return { errors: [window.__nflFail] };
+        team.stateNode.state.starters = team.stateNode.state.starters.map((s, i) => ({ ...s, playerId: args[4][i] }));
+        return {};
+      },
+      rosterUpdateStarters: async () => ({ errors: ['not in season'] }),
+    },
+    stateNode: { state: { starters: [['QB', 'qbA'], ['RB', 'rbPlayed'], ['WR', 'wrA'], ['FLEX', 'rbB'], ['SUPER_FLEX', 'wrB']]
+      .map(([slotPosition, playerId]) => ({ slotPosition, playerId })) } },
+  };
+  window.__nflTeam = team;
+  const roster = document.querySelector('.team-roster');
+  roster.__reactInternalInstance$test = { memoizedProps: {}, return: team };
+  for (const [id, [name, , , proj]] of Object.entries(players)) {
+    const row = document.createElement('div');
+    row.className = 'team-roster-item';
+    row.innerHTML = '<span class="player-name">' + name + '</span> <div class="projections">' + (proj ?? '-') + '</div>';
+    row.querySelector('.projections').__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: {
+      playerId: id, scoringSettings: scoring, proj: proj == null ? undefined : { opponent: 'OPP', stats: { rec_yd: proj * 10 } },
+    } } };
+    roster.append(row);
+  }
+</script>`;
+
 let context;
 let page;
 const pageErrors = [];
@@ -1032,5 +1098,62 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   await page.keyboard.press('Escape');
   sleeper.projections = null;
   sleeper.midWeek = false;
+  documentBody = LOGGED_OUT;
+});
+
+const nflDialog = (sel = '') => `#sleeper-nfl-dialog ${sel}`;
+test('NFL optimize lineup: an OPTIMIZE button beside WAIVER and TRADE proposes and saves through Sleeper', async () => {
+  documentBody = nflTeamTab();
+  await page.goto(NFL_TEAM_URL);
+  const button = page.locator('.user-tab-menu .actions > #snp-optimize');
+  await button.waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('.user-tab-menu .actions > .btn-container').first().getAttribute('id'), 'snp-optimize', 'first, left of WAIVER');
+  assert.equal(await button.locator('.btn-text').textContent(), 'OPTIMIZE');
+  assert.equal(await page.locator('#sleeper-nba-panel').count(), 0, 'no NBA panel on an NFL league');
+  await page.locator('.user-tab-menu').screenshot({ path: `${OUT}nfl-button.png` });
+
+  await button.click();
+  await page.locator(nflDialog('.op-row')).first().waitFor();
+  assert.match(await page.locator(nflDialog('.op-sum')).textContent(), /51\.00\s*→\s*68\.00\s*\+17\.00/);
+  const rows = await page.locator(nflDialog('.op-row')).evaluateAll((els) => els.map((el) => el.querySelector('.dp-name b').textContent));
+  // Alpha WR keeping WR with Gamma WR at FLEX adds up the same as swapping them, so nobody else moves.
+  assert.deepEqual(rows, ['Gamma WR', 'Beta QB', 'Beta RB', 'Beta WR']);
+  // Questionable can start, highlighted; Out and bye-week players don't; kicked-off players stay put.
+  const questionable = page.locator(nflDialog('.op-row.watch')).filter({ hasText: 'Beta QB' });
+  assert.equal(await questionable.locator('.nfl-inj.watch').textContent(), 'Q');
+  assert.match(await page.locator(nflDialog('.warn-banner')).textContent(), /Beta QB is Questionable/);
+  assert.match(await page.locator(nflDialog('.op-fixed')).textContent(), /Early RB \(game started\)/);
+  assert.equal(await page.locator(nflDialog('.lose-banner, [data-op-ack]')).count(), 0, 'no warnings to confirm');
+  await page.locator(nflDialog('.how')).hover();
+  assert.match(await page.locator(nflDialog('.how-tip')).innerText(), /^How it picks:\n1\. Every player gets a number: their projected points/);
+  await page.mouse.move(0, 0);
+  await page.screenshot({ path: `${OUT}nfl-dialog.png` });
+
+  // Cancel saves nothing.
+  await page.locator(nflDialog('.op-foot button[data-action="close-modal"]')).click();
+  await page.locator(nflDialog('.modal')).waitFor({ state: 'detached' });
+  assert.equal(await page.evaluate(() => window.__nflSaves.length), 0);
+
+  // A refused save keeps the dialog open with Sleeper's error.
+  await page.evaluate(() => { window.__nflFail = 'Player is locked'; });
+  await button.click();
+  await page.locator(nflDialog('[data-action="apply-lineup"]')).click();
+  assert.match(await page.locator(nflDialog('.dialog-errors')).textContent(), /Player is locked/);
+  await page.evaluate(() => { window.__nflFail = null; });
+
+  await page.locator(nflDialog('[data-action="apply-lineup"]')).click();
+  await page.locator(nflDialog('.modal')).waitFor({ state: 'detached' });
+  assert.match(await page.locator(nflDialog('.notice.ok')).textContent(), /^Saved: 4 lineup changes$/);
+  const saves = await page.evaluate(() => window.__nflSaves);
+  assert.equal(saves.length, 2);
+  assert.deepEqual(saves[1], [NFL_LEAGUE, 4, 7, 7, ['qbA', 'rbPlayed', 'wrA', 'wrC', 'qbB']], "Sleeper's own updateMatchupLeg, in season");
+  await page.screenshot({ path: `${OUT}nfl-saved.png` });
+
+  // The saved lineup is the best one now; and the button is only for your own team.
+  await button.click();
+  assert.match(await page.locator(nflDialog('.dialog-body')).textContent(), /already your best lineup for week 7/);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { window.__nflTeam.memoizedProps.isTeamOwner = false; });
+  await button.waitFor({ state: 'detached' });
   documentBody = LOGGED_OUT;
 });

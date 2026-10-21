@@ -4,7 +4,7 @@
 // On every page of an NBA league it also answers Sleeper's waiver and add
 // buttons (see page-hook.js) with a bid dialog.
 (() => {
-  const { createApi, view, model, scoring, ui, waivers, optimize, card } = globalThis.SNP;
+  const { createApi, view, model, scoring, ui, waivers, optimize, card, nfl } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
   const PANEL_PAGES = new Set(['team', 'matchup']);
   const PLAYERS_PATH = '/v1/players/nba';
@@ -93,12 +93,15 @@
       modal: null,
     };
     let destroyed = false;
+    let lastPage = page; // the league tab shown, panel or not
+    let nflSession = null; // set instead of the panel when the league is NFL
     let pendingCard = null; // player card asked for before the league finished loading
     let disabled = false;
     let frame = 0;
     const api = createApi(schedule);
 
     function attach() {
+      nflSession?.attach();
       if (destroyed || disabled) return;
       if (!state.onPanel) return detach();
       const placeholder = document.querySelector('.postdraft-panel .empty-panel-container');
@@ -208,9 +211,11 @@
       state.error = null;
       const league = await api.get(`/v1/league/${leagueId}`);
       if (league.sport !== 'nba') {
-        console.info('[sleeper-nba-panel] not an NBA league, staying hidden');
         disabled = true;
         teardown();
+        // NFL leagues get only Optimize lineup on Sleeper's own Team tab.
+        if (league.sport === 'nfl' && !destroyed) nflSession = mountNfl(leagueId, lastPage);
+        else console.info('[sleeper-nba-panel] not an NBA league, staying hidden');
         return;
       }
       // Tells page-hook.js to route this league's waiver and add buttons here.
@@ -892,6 +897,8 @@
 
     // Same league, other tab (Team <-> Matchup): keep the data, swap the view.
     function show(next) {
+      lastPage = next;
+      nflSession?.show(next);
       const onPanel = PANEL_PAGES.has(next);
       if (onPanel === state.onPanel && (!onPanel || next === state.page)) return;
       state.onPanel = onPanel;
@@ -916,11 +923,179 @@
 
     function destroy() {
       destroyed = true;
+      nflSession?.destroy();
       teardown();
     }
 
     loadLeague().catch(fail);
     return { leagueId, attach, show, destroy };
+  }
+
+  // NFL leagues: Sleeper's web app runs the Team tab itself. This adds an
+  // OPTIMIZE button beside its WAIVER and TRADE buttons, a confirm dialog, and
+  // saves through Sleeper's own actions (page-hook.js reads and writes the lineup).
+  function mountNfl(leagueId, page) {
+    const BUTTON_ID = 'snp-optimize';
+    const layer = document.createElement('div');
+    layer.id = 'sleeper-nfl-dialog';
+    const shadow = layer.attachShadow({ mode: 'open' });
+    shadow.innerHTML = '<style></style><div class="root"></div>';
+    const root = shadow.querySelector('.root');
+    const state = { page, modal: null, notice: null };
+    let destroyed = false;
+    let styled = false;
+    stylesheet.then((css) => {
+      shadow.querySelector('style').textContent = css;
+      styled = true;
+      render();
+    });
+
+    // The Team tab's lineup from page-hook.js, which answers before dispatchEvent returns.
+    function lineup(full) {
+      let data = null;
+      const take = (e) => {
+        data = JSON.parse(e.detail);
+      };
+      document.addEventListener('snp:nfl-lineup', take);
+      document.dispatchEvent(new CustomEvent('snp:nfl-lineup-request', { detail: JSON.stringify({ leagueId, full }) }));
+      document.removeEventListener('snp:nfl-lineup', take);
+      return data;
+    }
+
+    // Sleeper's projections, scored with the league's settings exactly as its Team tab shows them.
+    function plan(l) {
+      const proj = Object.fromEntries(Object.entries(l.projections).map(([id, p]) => [id, scoring.scoreStats(l.scoring || {}, p.stats)]));
+      return model.bestNflLineup({ ...l, proj });
+    }
+
+    function render() {
+      if (destroyed || !styled) return;
+      if (!state.modal && !state.notice) return layer.remove();
+      if (!layer.isConnected) document.documentElement.appendChild(layer);
+      root.innerHTML = `<div class="page-layer">${nfl.render(state)}${ui.notice(state)}</div>`;
+    }
+
+    function flash(text) {
+      const shown = { kind: 'ok', text };
+      state.notice = shown;
+      setTimeout(() => {
+        if (state.notice !== shown) return;
+        state.notice = null;
+        render();
+      }, NOTICE_MS);
+    }
+
+    function open() {
+      const l = lineup(true);
+      if (!l?.editable) return;
+      state.modal = { lineup: l, plan: plan(l), errors: [], saving: false };
+      state.notice = null;
+      render();
+    }
+
+    function close() {
+      if (state.modal?.saving) return;
+      state.modal = null;
+      render();
+    }
+
+    // Works the plan out again first: if a game kicked off while the dialog
+    // was open, it shows the new plan instead of saving one you haven't seen.
+    function apply() {
+      const m = state.modal;
+      if (!m || m.saving) return;
+      const l = lineup(true);
+      const fresh = l?.editable ? plan(l) : null;
+      if (!fresh) {
+        m.errors = ['The Team tab changed; open Optimize again.'];
+        return render();
+      }
+      if (JSON.stringify(fresh.starters) !== JSON.stringify(m.plan.starters) ||
+        JSON.stringify(fresh.changes) !== JSON.stringify(m.plan.changes)) {
+        Object.assign(m, { lineup: l, plan: fresh, errors: ['Games have kicked off since this opened. Review the updated changes.'] });
+        return render();
+      }
+      const name = (id) => l.players[id]?.name || `Player #${id}`;
+      const moved = fresh.changes.length > 3 ? `${fresh.changes.length} lineup changes`
+        : fresh.changes.map(({ id, to }) => `${name(id)} to ${to === 'BN' ? 'bench' : to}`).join(', ');
+      m.saving = true;
+      m.errors = [];
+      render();
+      const done = (e) => {
+        document.removeEventListener('snp:nfl-lineup-saved', done);
+        if (destroyed) return;
+        const result = JSON.parse(e.detail);
+        if (result.ok) {
+          state.modal = null;
+          flash(`Saved: ${moved}`);
+        } else {
+          m.saving = false;
+          m.errors = [result.error];
+        }
+        render();
+      };
+      document.addEventListener('snp:nfl-lineup-saved', done);
+      document.dispatchEvent(new CustomEvent('snp:nfl-lineup-save', {
+        detail: JSON.stringify({ leagueId, rosterId: l.rosterId, round: l.round, starters: fresh.starters }),
+      }));
+    }
+
+    // Sleeper re-renders its header now and then, so this runs on every page change.
+    function attach() {
+      if (destroyed) return;
+      const actions = state.page === 'team' ? document.querySelector('.user-tab-menu .actions') : null;
+      const button = document.getElementById(BUTTON_ID);
+      if (!actions || !lineup(false)?.editable) return button?.remove();
+      if (button && actions.firstElementChild === button) return;
+      const el = button || Object.assign(document.createElement('div'), {
+        id: BUTTON_ID,
+        className: 'btn-container space',
+        innerHTML: nfl.BUTTON,
+        title: 'Propose the best starting lineup for this week',
+        tabIndex: 0,
+      });
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', 'Optimize lineup');
+      actions.prepend(el);
+    }
+
+    function show(next) {
+      state.page = next;
+      if (next !== 'team') close();
+      attach();
+    }
+
+    function onClick(e) {
+      if (e.target instanceof Element && e.target.closest(`#${BUTTON_ID}`)) open();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape' && state.modal) return close();
+      if ((e.key === 'Enter' || e.key === ' ') && e.target instanceof Element && e.target.id === BUTTON_ID) {
+        e.preventDefault();
+        open();
+      }
+    }
+    document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+    root.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'close-modal') close();
+      if (action === 'apply-lineup') apply();
+    });
+    root.addEventListener('error', (e) => {
+      if (e.target.tagName === 'IMG') e.target.classList.add('missing');
+    }, true);
+
+    function destroy() {
+      destroyed = true;
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+      document.getElementById(BUTTON_ID)?.remove();
+      layer.remove();
+    }
+
+    attach();
+    return { attach, show, destroy };
   }
 
   // The season ends when the league's playoff bracket does. Round count comes

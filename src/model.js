@@ -76,9 +76,14 @@
     return picks;
   }
 
-  // Which positions each NBA slot accepts, per Sleeper's slot descriptions
+  // Which positions each slot accepts, per Sleeper's slot descriptions
   // ("G: POINT GUARD / SHOOTING GUARD", "UTIL: UTILITY (ALL)"). Bench takes anyone.
-  const SLOT_ACCEPTS = { G: ['PG', 'SG'], F: ['SF', 'PF'] };
+  const SLOT_ACCEPTS = {
+    G: ['PG', 'SG'], F: ['SF', 'PF'],
+    // NFL flex slots, from Sleeper's web app; every other NFL slot takes only its own position.
+    FLEX: ['RB', 'WR', 'TE'], WRRB_FLEX: ['RB', 'WR'], REC_FLEX: ['WR', 'TE'],
+    SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'], IDP_FLEX: ['DL', 'LB', 'DB'],
+  };
   const OPEN_SLOTS = new Set(['UTIL', 'BN']);
 
   function fits(slot, player) {
@@ -287,12 +292,111 @@
   }
 
   // Slots that take fewer positions come first on a tie, so a pure center
-  // sits at C and UTIL stays open for anyone.
-  const slotSpecificity = (slot) => (OPEN_SLOTS.has(slot) ? 0 : SLOT_ACCEPTS[slot] ? 1 : 2);
+  // sits at C and UTIL (or FLEX) stays open for anyone.
+  const slotSpecificity = (slot) => (OPEN_SLOTS.has(slot) ? 0 : 6 - (SLOT_ACCEPTS[slot]?.length ?? 1));
 
-  // The starting lineup with the highest total worth, found by trying every
-  // way to fit the movable players into the open slots. Ties go to the lineup
+  // Hungarian algorithm: the row -> column assignment with the lowest total
+  // cost, for an n x m matrix with n <= m. Runs in O(n^2 m), so even a 20-slot
+  // IDP lineup solves instantly.
+  function cheapestAssignment(cost) {
+    const n = cost.length;
+    const m = cost[0]?.length ?? 0;
+    const u = new Array(n + 1).fill(0);
+    const v = new Array(m + 1).fill(0);
+    const row = new Array(m + 1).fill(0); // column j's row (1-based), 0 when free
+    const way = new Array(m + 1).fill(0);
+    for (let i = 1; i <= n; i++) {
+      row[0] = i;
+      let j0 = 0;
+      const minv = new Array(m + 1).fill(Infinity);
+      const used = new Array(m + 1).fill(false);
+      do {
+        used[j0] = true;
+        const i0 = row[j0];
+        let delta = Infinity;
+        let j1 = 0;
+        for (let j = 1; j <= m; j++) {
+          if (used[j]) continue;
+          const reduced = cost[i0 - 1][j - 1] - u[i0] - v[j];
+          if (reduced < minv[j]) {
+            minv[j] = reduced;
+            way[j] = j0;
+          }
+          if (minv[j] < delta) {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+        for (let j = 0; j <= m; j++) {
+          if (used[j]) {
+            u[row[j]] += delta;
+            v[j] -= delta;
+          } else {
+            minv[j] -= delta;
+          }
+        }
+        j0 = j1;
+      } while (row[j0] !== 0);
+      do {
+        const j1 = way[j0];
+        row[j0] = row[j1];
+        j0 = j1;
+      } while (j0);
+    }
+    const colOf = new Array(n);
+    for (let j = 1; j <= m; j++) if (row[j]) colOf[row[j] - 1] = j - 1;
+    return colOf;
+  }
+
+  // The starting lineup with the highest total worth: every movable player is
+  // matched to an open slot they fit, or to the bench. Ties go to the lineup
   // that moves the fewest players, then to players in their most specific slot.
+  //   worth(id): points a player is worth starting; fixedReason(id): why they can't move, or null.
+  function solveLineup({ slots, starters: current, bench, players, worth, fixedReason }) {
+    const real = (id) => id && id !== '0';
+    const fixed = [];
+    const open = [];
+    current.forEach((id, i) => {
+      const reason = real(id) && fixedReason(id);
+      if (reason) fixed.push({ id, reason });
+      else open.push(i);
+    });
+    const benchFixed = bench.filter((id) => fixedReason(id));
+    fixed.push(...benchFixed.map((id) => ({ id, reason: fixedReason(id) })));
+    const pool = [...current.filter((id, i) => real(id) && open.includes(i)), ...bench.filter((id) => !benchFixed.includes(id))];
+
+    const slotOf = (i) => slots[i] ?? 'UTIL';
+    // Lexicographic in one number: points (to the cent) first, then staying put, then a specific slot.
+    const weight = (id, i) => Math.round(worth(id) * 100) * 1e6 + (current[i] === id ? 1000 : 0) + slotSpecificity(slotOf(i));
+    const NO = 1e15; // can't play that slot
+    // Rows: players. Columns: the open slots, then one bench spot per player.
+    const cost = pool.map((id) => [
+      ...open.map((i) => (fits(slotOf(i), players[id] || {}) ? -weight(id, i) : NO)),
+      ...pool.map(() => 0),
+    ]);
+    const starters = current.map((id, i) => (open.includes(i) ? '0' : id));
+    if (pool.length) {
+      cheapestAssignment(cost).forEach((col, k) => {
+        if (col < open.length) starters[open[col]] = pool[k];
+      });
+    }
+
+    const where = (list, id) => {
+      const i = list.indexOf(id);
+      return i < 0 ? 'BN' : slotOf(i);
+    };
+    const changes = [...new Set([...current, ...starters])]
+      .filter((id) => real(id) && current.indexOf(id) !== starters.indexOf(id))
+      .map((id) => ({ id, from: where(current, id), to: where(starters, id) }))
+      // Lineup order, then whoever goes to the bench.
+      .sort((a, b) => (starters.includes(a.id) ? starters.indexOf(a.id) : 100 + current.indexOf(a.id)) -
+        (starters.includes(b.id) ? starters.indexOf(b.id) : 100 + current.indexOf(b.id)));
+    const total = (list) => list.reduce((sum, id) => sum + (real(id) ? worth(id) : 0), 0);
+    return { starters, changes, fixed, before: total(current), after: total(starters) };
+  }
+
+  // NBA (Lock-In): a player's worth is their projection per game left this week,
+  // or a starter's still-lockable finished score if that's more.
   function bestLineup(l, now = Date.now()) {
     if (!l.week) return null;
     const look = {};
@@ -301,70 +405,42 @@
     };
     l.starters.forEach((id) => id && id !== '0' && consider(id, true));
     l.bench.forEach((id) => consider(id, false));
-
-    const fixed = [];
-    const open = [];
-    l.starters.forEach((id, i) => {
-      if (id && id !== '0' && look[id].fixed) fixed.push({ id, reason: look[id].fixed });
-      else open.push(i);
+    const plan = solveLineup({
+      slots: l.slots, starters: l.starters, bench: l.bench, players: l.players,
+      worth: (id) => look[id].value,
+      fixedReason: (id) => look[id].fixed,
     });
-    const benchFixed = l.bench.filter((id) => look[id].fixed);
-    fixed.push(...benchFixed.map((id) => ({ id, reason: look[id].fixed })));
-    const pool = [...l.starters.filter((id, i) => id && id !== '0' && open.includes(i)), ...l.bench.filter((id) => !benchFixed.includes(id))];
+    plan.changes = plan.changes.map((c) => {
+      const { perGame, gamesLeft, banked } = look[c.id];
+      const lost = c.to === 'BN' && banked?.actual > 0 ? banked : null;
+      return {
+        ...c,
+        perGame,
+        gamesLeft,
+        // Benching a starter whose finished game could still be locked throws that score away.
+        lost,
+        // A green score is worth stopping for; anything less is a softer warning.
+        goodScore: Boolean(lost) && scoreTier(lost.actual) === 'green',
+      };
+    });
+    return plan;
+  }
 
-    const slotOf = (i) => l.slots[i] ?? 'UTIL';
-    const weight = (id, i) => Math.round(look[id].value * 100) * 10000 +
-      (l.starters[i] === id ? 100 : 0) + slotSpecificity(slotOf(i));
-    // best(k, used): the best total for pool[k..] given the open slots already taken.
-    const memo = new Map();
-    function best(k, used) {
-      if (k === pool.length) return 0;
-      const key = k * 2 ** open.length + used;
-      if (memo.has(key)) return memo.get(key).total;
-      let pick = { total: best(k + 1, used), slot: -1 };
-      open.forEach((i, bit) => {
-        if (used & (1 << bit) || !fits(slotOf(i), l.players[pool[k]] || {})) return;
-        const total = weight(pool[k], i) + best(k + 1, used | (1 << bit));
-        if (total > pick.total) pick = { total, slot: bit };
-      });
-      memo.set(key, pick);
-      return pick.total;
-    }
-    best(0, 0);
-    const starters = l.starters.map((id, i) => (open.includes(i) ? '0' : id));
-    for (let k = 0, used = 0; k < pool.length; k++) {
-      const { slot } = memo.get(k * 2 ** open.length + used);
-      if (slot < 0) continue;
-      starters[open[slot]] = pool[k];
-      used |= 1 << slot;
-    }
+  // NFL injury statuses that mean a player won't play this week.
+  const NFL_SITTING = new Set(['Out', 'IR', 'PUP', 'Sus', 'NA', 'COV', 'DNR']);
 
-    const where = (list, id) => {
-      const i = list.indexOf(id);
-      return i < 0 ? 'BN' : slotOf(i);
-    };
-    const changes = [...new Set([...l.starters, ...starters])]
-      .filter((id) => id && id !== '0' && l.starters.indexOf(id) !== starters.indexOf(id))
-      .map((id) => {
-        const { perGame, gamesLeft, banked } = look[id];
-        const benched = !starters.includes(id);
-        return {
-          id,
-          from: where(l.starters, id),
-          to: where(starters, id),
-          perGame,
-          gamesLeft,
-          // Benching a starter whose finished game could still be locked throws that score away.
-          lost: benched && banked?.actual > 0 ? banked : null,
-          // A green score is worth stopping for; anything less is just noted.
-          goodScore: benched && banked?.actual > 0 && scoreTier(banked.actual) === 'green',
-        };
-      })
-      // Lineup order, then whoever goes to the bench.
-      .sort((a, b) => (starters.includes(a.id) ? starters.indexOf(a.id) : 100 + l.starters.indexOf(a.id)) -
-        (starters.includes(b.id) ? starters.indexOf(b.id) : 100 + l.starters.indexOf(b.id)));
-    const total = (list) => list.reduce((sum, id) => sum + (id && id !== '0' ? look[id].value : 0), 0);
-    return { starters, changes, fixed, before: total(l.starters), after: total(starters) };
+  // NFL: one game a week, so a player's worth is that game's projection (0 on a
+  // bye or when ruled out). Players whose team has kicked off are locked by Sleeper.
+  //   l: { slots, starters, bench, players: { id: { positions, injury } }, proj: { id: points }, played: { id: true } }
+  function bestNflLineup(l) {
+    const worth = (id) => (NFL_SITTING.has(l.players[id]?.injury) ? 0 : l.proj[id] ?? 0);
+    const plan = solveLineup({
+      slots: l.slots, starters: l.starters, bench: l.bench, players: l.players,
+      worth,
+      fixedReason: (id) => (l.played[id] ? 'played' : null),
+    });
+    plan.changes = plan.changes.map((c) => ({ ...c, proj: worth(c.id) }));
+    return plan;
   }
 
   // Sleeper's win probability (ported from its web app): each side is a normal
@@ -458,7 +534,7 @@
   return {
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen, reserveEligible,
-    lockedGameId, lockState, scoreTier, bestLineup, winProbability, standingsRanks,
+    lockedGameId, lockState, scoreTier, bestLineup, bestNflLineup, cheapestAssignment, winProbability, standingsRanks,
     FAAB, rosterRoom, faabLeft, claimError, sortClaims,
   };
 })();

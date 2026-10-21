@@ -62,6 +62,19 @@ Clicking a player's name or headshot on the Team or Matchup tab, or a player on 
 - Career: one row per season with fantasy points, position rank, per-game averages and shooting.
 - Transaction history in this league (logged in), latest news, and the team's depth chart.
 
+### NFL: Optimize lineup
+
+Sleeper's web app already runs NFL leagues, so the extension adds only one thing there: an **OPTIMIZE** button on your own Team tab, left of Sleeper's WAIVER and TRADE buttons (it reuses their classes, so it looks like them).
+It opens the same kind of confirmation dialog as the NBA version, with no warnings to tick through:
+
+- Worth: Sleeper's projection for this week's game, scored with the league's settings (the same number the Team tab shows). A bye week or a player ruled Out (Out, IR, PUP, Sus, NA) is worth 0.
+- Lineup: the same solver as NBA, with Sleeper's NFL slot rules (FLEX takes RB/WR/TE, WRRB_FLEX RB/WR, REC_FLEX WR/TE, SUPER_FLEX QB/RB/WR/TE, IDP_FLEX DL/LB/DB, every other slot its own position). Ties keep the most players where they are.
+- Players whose team has kicked off stay put, as Sleeper locks them.
+- Questionable and Doubtful players can start; when one moves into the lineup their row is highlighted with a note to check the news.
+- Apply works the plan out again first, then saves through Sleeper's own Team component (`updateMatchupLeg` in season, `roster_update_starters` before it, as its `_updateRoster` does), so Sleeper's screen updates as if you'd made the swaps.
+
+How it hooks in: `src/page-hook.js` reads the lineup from Sleeper's Team component props (slots and starters as shown, roster, players, `hasTeamPlayedMap`) and each row's projection (`proj` stats and `scoringSettings`), and answers the extension's `snp:nfl-lineup-request` synchronously.
+
 ### Waivers
 
 Sleeper's web Players tab lists NBA players with their waiver (W) or ADD buttons, but answers every click with "Player Actions not yet available on web for NBA fantasy".
