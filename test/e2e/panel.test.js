@@ -7,8 +7,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-// The production build (npm run test:e2e builds it first).
-const EXT = fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url));
+const EXT = fileURLToPath(new URL('../..', import.meta.url));
 const OUT = fileURLToPath(new URL('../../test-results/', import.meta.url));
 const LEAGUE = process.env.SLEEPER_LEAGUE_ID || '1374952493246611456';
 const TEAM_URL = `https://sleeper.com/leagues/${LEAGUE}/team`;

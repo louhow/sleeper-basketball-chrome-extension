@@ -12,20 +12,15 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 - Browser testing is headless only (Playwright). The user's real Chrome is for reading live data with their session, not for testing.
 - Writes against the live league (bids, lineup, taxi, IR) only with the user's go-ahead; tell them exactly what is left to undo.
 - npm registry is `registry.npmjs.org` (see `.npmrc`); no work registries.
-- Built with [WXT](https://wxt.dev). `npm run build` writes `.output/chrome-mv3`; `npm run test:e2e` builds first and loads that.
-- Live checks in the user's Chrome: the user runs `npm run dev` (port 50030) in their own terminal with `.output/chrome-mv3-dev` loaded unpacked. Every saved change then rebuilds, and content script changes reload open `sleeper.com` tabs by themselves. Never start the dev server yourself (it never exits); if the page doesn't pick up a change, ask whether it's running.
-- Every push to `main` runs `.github/workflows/release.yml`, which replaces the `latest` GitHub release with a fresh `sleeper-nba.zip`. That zip is how users install, so `main` must always build.
 
 ## Layout
 
-- `wxt.config.js`: manifest fields, dev server port, zip name. WXT generates `manifest.json`.
-- `entrypoints/content.js`: the content script, at `document_start` on `sleeper.com`. Imports the `src` modules in order (`scoring`, `model`, `api`, `ui`, `view`, `matchup`, `waivers`, `optimize`, `card`, each adding itself to `globalThis.SNP`), then calls `content.js`'s `start(css)` with `panel.css` inlined. `test/unit/load.js` reads the same order from this file.
-- `entrypoints/page-hook.content.js`: runs `src/page-hook.js` in the page's MAIN world.
+- `manifest.json`: content scripts run at `document_start` on `sleeper.com`, in this order: `scoring`, `model`, `api`, `ui`, `view`, `matchup`, `waivers`, `optimize`, `card`, `content`. `page-hook.js` runs separately in the page's MAIN world.
 - `src/model.js`: pure rules (schedule, Lock-In, lineup/taxi/IR moves, best lineup, waivers, win probability). Unit tested.
 - `src/ui.js`, `src/view.js`, `src/matchup.js`, `src/waivers.js`, `src/optimize.js` (Optimize lineup dialog), `src/card.js` (player card): pure state -> HTML render functions.
 - `src/content.js`: one session per league (survives tab switches), data loading, saves, events. Renders into a shadow root that replaces Sleeper's "not yet available" placeholder; dialogs render in a separate page-level host.
 - `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and Players/Trend player rows, and hands clicks to the extension via `snp:player-action` / `snp:player-card` DOM events, only for leagues the extension marked NBA (`html[data-snp-nba-league]`).
-- `src/panel.css`: all styles, bundled as a string and inlined into each shadow root.
+- `src/panel.css`: all styles, inlined into each shadow root.
 - `test/unit` (node:test, `TZ=America/New_York`), `test/e2e/panel.test.js` (stand-in Sleeper pages, live public API, mocked authenticated GraphQL). Each e2e run also writes `test-results/e2e.tap`; read it when a run fails intermittently.
 
 ## Conventions and gotchas

@@ -14,7 +14,3 @@ playwright-report/
 *.log
 .vscode/
 .idea/
-
-# WXT build output and generated types
-.output/
-.wxt/

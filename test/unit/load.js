@@ -1,14 +1,13 @@
-// Loads the extension's modules into a fresh VM context, in the order the
-// content script entrypoint imports them (content.js itself needs a browser).
+// Loads the extension's content scripts into a fresh VM context, in manifest order.
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const entry = readFileSync(new URL('../../entrypoints/content.js', import.meta.url), 'utf8');
-export const MODULES = [...entry.matchAll(/^import '\.\.\/(src\/[\w-]+\.js)';$/gm)].map((m) => m[1]);
+const manifest = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
 
 export function loadSnp() {
   const context = vm.createContext({});
-  for (const file of MODULES) {
+  for (const file of manifest.content_scripts[0].js) {
+    if (file.endsWith('content.js')) continue;
     vm.runInContext(readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8'), context, { filename: file });
   }
   return context.SNP;

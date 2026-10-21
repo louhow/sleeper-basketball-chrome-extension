@@ -17,18 +17,15 @@ The only things it stores are a cached copy of Sleeper's public NBA player list 
 
 ## Install
 
-1. Download [sleeper-nba.zip](https://github.com/louhow/sleeper-basketball-chrome-extension/releases/latest/download/sleeper-nba.zip) and unzip it.
+1. Clone the repo: `git clone https://github.com/louhow/sleeper-basketball-chrome-extension.git`
 2. Open `chrome://extensions` and turn on Developer mode.
-3. Click "Load unpacked" and pick the unzipped `sleeper-nba` folder.
+3. Click "Load unpacked" and pick the cloned directory.
 4. Visit `https://sleeper.com/leagues/<league id>/team` while logged in.
 
 It only mounts for NBA leagues.
 Pick your team in the dropdown once; the choice is remembered per league.
 If the page has no empty Team tab to fill, it shows as a floating panel instead.
-To update, download and unzip the latest zip over the same folder, hit the reload icon on the extension card, and refresh the Sleeper tab.
-The zip is rebuilt on every change to `main`; the repo's own "Download ZIP" is source code and won't load as is.
-
-To build from source instead: `npm install && npm run build`, then load `.output/chrome-mv3`.
+To update, `git pull`, hit the reload icon on the extension card, and refresh the Sleeper tab.
 
 See [docs/DETAILS.md](docs/DETAILS.md) for features, the API calls it makes, and tests.
 
