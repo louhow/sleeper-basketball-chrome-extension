@@ -99,7 +99,7 @@
     const club = next && s.clubs?.[next.opponent];
     if (!club) return '';
     const form = club.form.map((r) => `<i class="${r.toLowerCase()}" title="${r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}">${r}</i>`).join('');
-    return ` <span class="rec" title="${esc(`${club.abbr}: ${club.record} (wins-draws-losses), last ${club.form.length}`)}">(${esc(club.record)})</span>${form ? ` <span class="form">${form}</span>` : ''}`;
+    return `<span class="rec" title="${esc(`${club.abbr}: ${club.record} (wins-draws-losses), last ${club.form.length}`)}">(${esc(club.record)})</span>${form ? `<span class="form">${form}</span>` : ''}`;
   }
 
   function cardClass({ s, editable, selecting, targets }, spot) {
@@ -127,7 +127,7 @@
       ${playerLine(s, id, { sub })}
       <div class="match">
         <span class="chips">${gameChips(games, s.now)}</span>
-        <span class="when">${esc(nextGameText(games, s.now))}${opponentForm(s, games)}</span>
+        <span class="when">${esc(nextGameText(games, s.now))}</span>${opponentForm(s, games)}
       </div>
       <div class="week-pts">
         <b>${t.played ? f2(t.points) : '–'}</b>

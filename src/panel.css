@@ -201,7 +201,7 @@ button.optimize:hover:not(:disabled) { background: rgba(0, 206, 184, 0.24); }
 .rhead h3 { margin: 0; font-size: 15px; }
 .rcols, .card {
   display: grid;
-  grid-template-columns: 48px 32px minmax(0, 1fr) minmax(90px, 150px) 64px;
+  grid-template-columns: 48px 32px minmax(0, 1fr) minmax(120px, 280px) 64px;
   align-items: center;
   column-gap: 10px;
 }
@@ -283,8 +283,8 @@ button.slot:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(255,
 .line2 { margin-top: 1px; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .line2 b { color: var(--text); font-weight: 900; }
 .match { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
-.match .when { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--muted); }
-.match .chips { flex: none; }
+.match .when { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--muted); }
+.match .chips, .match .rec, .match .form { flex: none; }
 .match .rec { color: var(--text); font-variant-numeric: tabular-nums; }
 .form { display: inline-flex; gap: 2px; vertical-align: 1px; }
 .form i { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px; font-style: normal; font-size: 9px; font-weight: 900; color: #0d1421; background: rgba(255, 255, 255, 0.25); }
