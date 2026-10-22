@@ -117,8 +117,8 @@
       ${slotBadge(slot, button, label)}
       ${playerLine(s, id, { sub })}
       <div class="match">
-        <span class="when">${esc(nextGameText(games, s.now))}</span>
         <span class="chips">${gameChips(games, s.now)}</span>
+        <span class="when">${esc(nextGameText(games, s.now))}</span>
       </div>
       <div class="week-pts">
         <b>${t.played ? f2(t.points) : '–'}</b>
