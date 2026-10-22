@@ -104,6 +104,7 @@
     const panel = el && fiber(el, (x) => x.scoringSettings && x.sport === 'nba' && 'leagueId' in x)?.stateNode;
     const ours = Boolean(panel?.state && admin && league && admin.leagueId === league && String(panel.props.leagueId) === league);
     document.documentElement.toggleAttribute('data-snp-admin-changed', ours && admin.changed);
+    document.documentElement.toggleAttribute('data-snp-admin-col', ours && panel.state.statKeys?.includes(ADMIN_KEY));
     if (!ours) return;
     if (!panel.snpHooked) {
       // Sleeper replaces its stats map on every week, season or Projection/Stats switch; patch right after.
@@ -137,9 +138,13 @@
     if (document.documentElement.dataset.snpNbaLeague && document.querySelector(PLAYERS_PANEL)) patchPlayers();
   }, 500);
 
+  // Sleeper's header cells are 60px and uppercase; the label reads as named and fits on one line.
   // The column wears the what-if color once a value differs from the league's.
   const adminStyle = document.createElement('style');
   adminStyle.textContent = `
+    html[data-snp-admin-col] ${PLAYERS_PANEL} .stat-key-header > :nth-child(2 of .label) span {
+      text-transform: none; font-size: 11px; letter-spacing: -0.2px; white-space: nowrap;
+    }
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > :nth-child(2 of .label) span,
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .player-list-item > :nth-child(2 of .cell) { color: #b69cff !important; }`;
   (document.head || document.documentElement).append(adminStyle);
