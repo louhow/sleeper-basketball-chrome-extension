@@ -30,9 +30,10 @@
       </section>
       ${noLegs ? '<p class="hint center">Matchup pairings come from Sleeper\'s logged-in API, which didn\'t answer; showing the roster\'s saved lineup.</p>' : ''}
       <div class="mu-starters">
-        <div class="mu-forms"><b class="mine">${esc(mine.formation)}</b><span class="sub">Formation</span><b class="theirs">${theirs ? esc(theirs.formation) : '–'}</b></div>
+        <div><h3>Starters</h3></div>
         ${weekNav(s)}
       </div>
+      <div class="mu-forms"><b class="mine">${esc(mine.formation)}</b><span class="sub">Formation</span><b class="theirs">${theirs ? esc(theirs.formation) : '–'}</b></div>
       ${Array.from({ length: Math.max(mine.order.length, theirs?.order.length || 0) }, (_, k) => {
         const i = mine.order[k];
         const j = theirs?.order[k];
@@ -135,7 +136,7 @@
       return { games, ...weekTotals(games, s.now) };
     })();
     const [opp, when] = matchText(st.games, s.now);
-    const who = `<span class="who">${positions(p)}<span class="team">• ${esc(p.teamAbbr || 'FA')}</span></span>`;
+    const who = `<span class="mp-who">${positions(p)}<span class="team">• ${esc(p.teamAbbr || 'FA')}</span></span>`;
     const chips = `<span class="mp-games">${gameChips(st.games, s.now)}</span>`;
     return `<div class="mp ${cls}${st.live ? ' live' : ''}">
       <img class="headshot" src="${headshot(id)}" alt="" data-player="${esc(id)}">

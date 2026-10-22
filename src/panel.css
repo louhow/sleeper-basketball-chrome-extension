@@ -172,7 +172,7 @@ h3 .sub { font-weight: 400; margin-left: 6px; }
   background: rgba(255, 255, 255, 0.08);
 }
 .avatar.small { width: 28px; height: 28px; }
-.who { flex: 1; min-width: 160px; }
+.team-card .who { flex: 1; min-width: 160px; }
 .team-name {
   font-size: 18px;
   font-weight: 900;
@@ -392,10 +392,12 @@ h3.mu-title { margin: 14px 0 6px; }
   background: var(--card);
 }
 .mp-stats { margin-top: 2px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mu-forms { display: flex; align-items: baseline; gap: 10px; font-size: 16px; }
-.mu-forms b { font-weight: 900; font-variant-numeric: tabular-nums; }
-.mu-forms .mine { color: var(--accent); }
-.mu-forms .sub { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+.mu-forms { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: 8px; align-items: center; margin: 4px 0 8px; font-size: 18px; }
+.mu-forms b { font-weight: 900; font-variant-numeric: tabular-nums; padding: 0 10px; }
+.mu-forms .mine { color: var(--accent); text-align: left; }
+.mu-forms .theirs { text-align: right; }
+.mu-forms .sub { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; line-height: 1.1; }
+@container (max-width: 640px) { .mu-forms { grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); } }
 .slot.pair { display: grid; grid-template-columns: 1fr 1fr; padding: 0; overflow: hidden; background: transparent; }
 .slot.pair b { display: grid; place-items: center; height: 100%; font-size: 11px; }
 .slot.pair .f { background: var(--f); }
@@ -412,7 +414,7 @@ h3.mu-title { margin: 14px 0 6px; }
 .mp-id .name button.name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
 .mp-id .sub { display: flex; align-items: center; gap: 4px; font-size: 11px; white-space: nowrap; overflow: hidden; }
 .mp.theirs .mp-id .sub { justify-content: flex-end; }
-.mp-id .who { display: inline-flex; gap: 3px; align-items: baseline; }
+.mp-who { display: inline-flex; flex: none; gap: 3px; align-items: baseline; }
 .mp-game { grid-area: game; display: flex; flex-direction: column; min-width: 0; line-height: 1.2; white-space: nowrap; }
 .mp-game b { font-size: 12px; }
 .mp-game .sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
