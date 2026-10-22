@@ -78,7 +78,8 @@
   // Sleeper sorts a missing or 0 value as -1, so shifts are stored offset to stay positive.
   const DELTA_OFFSET = 10000;
   const PLAYERS_PANEL = '.integration-players-panel';
-  // { leagueId, changed } from the extension; it does the scoring itself.
+  // { leagueId, enabled, changed } from the extension; it does the scoring itself.
+  // Not enabled (no ?snp-admin=1), the columns stay out.
   let admin = null;
   let adminVersion = 0;
   let tints = {};
@@ -102,12 +103,21 @@
     return out;
   }
 
-  function playersPanel() {
+  function playersPanel({ disabled = false } = {}) {
     const league = document.documentElement.dataset.snpNbaLeague;
     const el = document.querySelector(PLAYERS_PANEL);
     const panel = el && fiber(el, (x) => x.scoringSettings && x.sport === 'nba' && 'leagueId' in x)?.stateNode;
     const ours = Boolean(panel?.state && admin && league && admin.leagueId === league && String(panel.props.leagueId) === league);
-    return ours ? panel : null;
+    return ours && (disabled || admin.enabled) ? panel : null;
+  }
+
+  // Admin tools turned off (?snp-admin=0) while the columns are up: take them back out.
+  function removeColumns() {
+    const panel = playersPanel({ disabled: true });
+    const keys = panel?.state.statKeys || [];
+    if (keys.includes(ADMIN_KEY) || keys.includes(DELTA_KEY)) {
+      panel.setState({ statKeys: keys.filter((k) => k !== ADMIN_KEY && k !== DELTA_KEY) });
+    }
   }
 
   // The players the list shows right now (after Sleeper's position, search and owned filters).
@@ -120,6 +130,7 @@
   // adminFPTS = Sleeper's FPTS plus what the changed settings add or take away,
   // so it matches FPTS exactly until a value changes.
   function patchPlayers() {
+    if (admin && !admin.enabled) removeColumns();
     const panel = playersPanel();
     document.documentElement.toggleAttribute('data-snp-admin-changed', Boolean(panel && admin.changed));
     document.documentElement.toggleAttribute('data-snp-admin-col', Boolean(panel?.state.statKeys?.includes(ADMIN_KEY)));

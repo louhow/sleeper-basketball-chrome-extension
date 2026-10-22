@@ -25,9 +25,42 @@
 
   let active = null;
 
+  // Admin tools (what-if scoring: the Scoring control and the Players tab's
+  // adminFPTS and adminDelta columns) are hidden unless turned on with
+  // ?snp-admin=1 (off again with ?snp-admin=0). Sleeper's own navigation drops
+  // the query string, between tabs and between leagues alike, so the choice is
+  // saved for the whole browser the first time a URL carries it, and every
+  // page, league, reload and tab follows the saved choice from then on.
+  const ADMIN_PARAM = 'snp-admin';
+  const ADMIN_STORE = 'admin';
+  let admin = false;
+  let adminFromUrl = false; // a URL decided it, so the saved choice loading late mustn't undo that
+  function adminParam() {
+    const value = new URLSearchParams(location.search).get(ADMIN_PARAM);
+    return value == null ? null : !['0', 'off', 'false', 'no'].includes(value.toLowerCase());
+  }
+  function setAdmin(on) {
+    if (on === admin) return;
+    admin = on;
+    active?.setAdmin(on);
+  }
+  chrome.storage.local.get(ADMIN_STORE).then((saved) => {
+    if (!adminFromUrl) setAdmin(Boolean(saved[ADMIN_STORE]));
+  });
+  // Another tab turned it on or off.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && ADMIN_STORE in changes) setAdmin(Boolean(changes[ADMIN_STORE].newValue));
+  });
+
   // Sleeper is a single-page app, so route changes don't reload content scripts.
   // Polling also re-attaches the panel if React re-renders the tab.
   function sync() {
+    const param = adminParam();
+    if (param != null && (param !== admin || !adminFromUrl)) {
+      adminFromUrl = true;
+      chrome.storage.local.set({ [ADMIN_STORE]: param });
+      setAdmin(param);
+    }
     const [, leagueId = null, page = null] = location.pathname.match(ROUTE) ?? [];
     // One session per league, kept across its tabs; the panel only shows on Team and Matchup.
     if (leagueId !== (active?.leagueId ?? null)) {
@@ -100,7 +133,8 @@
       modal: null,
       // What-if scoring: values that differ from the league's, whether they're in use, and the editor's state.
       // `drafts` holds text being typed that isn't a number yet.
-      whatIf: { overrides: {}, on: false, open: false, showAll: false, drafts: {} },
+      // `enabled` mirrors the admin switch (?snp-admin); off, nothing what-if shows or applies.
+      whatIf: { enabled: admin, overrides: {}, on: false, open: false, showAll: false, drafts: {} },
     };
     let destroyed = false;
     let lastPage = page; // the league tab shown, panel or not
@@ -189,7 +223,7 @@
     // the Team and Matchup tabs, its dialogs, and the Players tab's adminFPTS
     // column. It's patched in place, so a field being typed in keeps its focus, caret and text.
     function renderCorner() {
-      if (!(state.ready && !state.error && (state.onPanel || state.modal || lastPage === 'players'))) {
+      if (!(state.whatIf.enabled && state.ready && !state.error && (state.onPanel || state.modal || lastPage === 'players'))) {
         state.whatIf.open = false;
         return corner.remove();
       }
@@ -239,7 +273,7 @@
     // for each player's difference from the league's scoring (adminDeltas).
     function sendAdminScoring() {
       document.dispatchEvent(new CustomEvent('snp:admin-scoring', {
-        detail: JSON.stringify({ leagueId, changed: Object.keys(state.whatIf.overrides).length > 0 }),
+        detail: JSON.stringify({ leagueId, enabled: state.whatIf.enabled, changed: Object.keys(state.whatIf.overrides).length > 0 }),
       }));
     }
     // For each player: points the changed settings add to Sleeper's FPTS, and
@@ -1096,7 +1130,16 @@
     }
 
     loadLeague().catch(fail);
-    return { leagueId, attach, show, destroy };
+    // The admin switch flipped: show or hide what-if scoring, and rescore either way.
+    function setAdminTools(on) {
+      state.whatIf.enabled = on;
+      if (!on) state.whatIf.open = false;
+      rescore();
+      if (state.ready) sendAdminScoring();
+      schedule();
+    }
+
+    return { leagueId, attach, show, destroy, setAdmin: setAdminTools };
   }
 
   // NFL leagues: Sleeper's web app runs the Team tab itself. This adds an

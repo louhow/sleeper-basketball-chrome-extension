@@ -7,7 +7,7 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const LEAGUE = { pts: 0.5, reb: 1, blk: 2, fgm: 0, sp: 0, custom_stat: 0 };
 const state = (whatIf = {}) => ({
   league: { scoring_settings: LEAGUE },
-  whatIf: { overrides: {}, on: false, open: true, showAll: false, drafts: {}, ...whatIf },
+  whatIf: { enabled: true, overrides: {}, on: false, open: true, showAll: false, drafts: {}, ...whatIf },
 });
 
 test('settings list follows Sleeper, hides seconds played and keeps unknown league keys', () => {
@@ -29,6 +29,8 @@ test('what-if applies only when switched on with a change', () => {
   assert.equal(ui.whatIfOn(state({ overrides: { pts: 1 } })), false, 'switched to league');
   const s = state({ overrides: { pts: 1 }, on: true });
   assert.equal(ui.whatIfOn(s), true);
+  assert.equal(ui.whatIfOn(state({ overrides: { pts: 1 }, on: true, enabled: false })), false, 'admin tools off (no ?snp-admin=1)');
+  assert.equal(ui.scoringOf(state({ overrides: { pts: 1 }, on: true, enabled: false })).pts, 0.5);
   assert.equal(ui.scoringOf(s).pts, 1);
   assert.equal(ui.scoringOf(state({ overrides: { pts: 1 } })).pts, 0.5);
   assert.equal(ui.whatIfChanges(s), 'Points Scored 0.5 → 1');
@@ -108,7 +110,7 @@ function panelState(whatIf) {
       research: {},
       ranks: {},
     } },
-    whatIf: { overrides: whatIf ? { pts: 2 } : {}, on: Boolean(whatIf), open: false, showAll: false, drafts: {} },
+    whatIf: { enabled: true, overrides: whatIf ? { pts: 2 } : {}, on: Boolean(whatIf), open: false, showAll: false, drafts: {} },
   };
 }
 

@@ -64,6 +64,10 @@ Clicking a player's name or headshot on the Team or Matchup tab, or a player on 
 
 ### What-if scoring
 
+What-if scoring is an admin tool, hidden by default.
+Open any Sleeper page with `?snp-admin=1` once (for example `sleeper.com/leagues/<id>/players?snp-admin=1`) to turn it on, and with `?snp-admin=0` to turn it off.
+Sleeper's own navigation drops the query string, so the choice is saved for the whole browser and every page, league, reload and tab follows it; saved what-if values stay put while it's off.
+
 A **Scoring** control sits in the page's top-right corner on the Team, Matchup and Players tabs and over the extension's dialogs, to try other scoring settings without touching the league.
 
 - Open it to edit any value: the league's scored stats first, in Sleeper's order and wording, then the rest behind "Show more". Changed rows show the league's value, and clicking it puts that one back.

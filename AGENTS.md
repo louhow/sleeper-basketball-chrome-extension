@@ -26,6 +26,7 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 ## Conventions and gotchas
 
 - Read league rules from the API (`league.settings`, `scoring_settings`); never hardcode them.
+- What-if scoring and the adminFPTS/adminDelta columns are admin tools, off unless `?snp-admin=1` was seen (saved in `chrome.storage.local`, key `admin`).
 - Score fantasy points with `ui.scoringOf(state)`, never `league.scoring_settings` directly, so what-if scoring reaches them. Sleeper's own totals use league scoring; set them aside when `ui.whatIfOn(state)`.
 - Port behavior from Sleeper's own web bundle when it exists (mutation shapes, eligibility, dialog wording) instead of inventing it.
 - Logged-in calls send `localStorage.token` as `Authorization`; never log or render it.

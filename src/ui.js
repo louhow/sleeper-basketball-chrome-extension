@@ -175,8 +175,9 @@
     return `${names} players can move to IR.`;
   }
 
-  // What-if scoring (see whatif.js) applies once a value differs from the league's and it's switched on.
-  const whatIfOn = (s) => Boolean(s.whatIf?.on && Object.keys(s.whatIf.overrides || {}).length);
+  // What-if scoring (see whatif.js) applies once the admin tools are enabled
+  // (?snp-admin=1), a value differs from the league's, and it's switched on.
+  const whatIfOn = (s) => Boolean(s.whatIf?.enabled && s.whatIf.on && Object.keys(s.whatIf.overrides || {}).length);
 
   // The scoring settings every fantasy number on screen uses.
   function scoringOf(s) {

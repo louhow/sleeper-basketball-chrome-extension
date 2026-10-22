@@ -1173,7 +1173,13 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
   documentBody = LOGGED_IN;
   sleeper.rosters = null;
   await startMidWeek();
+  // Hidden by default: admin tools only show once a URL turns them on.
   await openMyTeam(TEAM_URL);
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator(corner('.wi-dock')).count(), 0, 'no Scoring control without ?snp-admin=1');
+  await openMyTeam(`${TEAM_URL}?snp-admin=1`);
+  // Sleeper's router drops the query string as you move around; the choice sticks anyway.
+  await page.evaluate(() => history.replaceState({}, '', location.pathname));
   const league = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}`)).json();
   const pts = league.scoring_settings.pts;
   const cells = () => page.locator(panel('.card .cell .v')).allTextContents();
@@ -1219,7 +1225,7 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
   await page.keyboard.press('Escape');
   await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
 
-  // Remembered across reloads; the Matchup tab sets aside Sleeper's totals and Lock-In.
+  // Remembered across reloads and pages (no ?snp-admin here); the Matchup tab sets aside Sleeper's totals and Lock-In.
   await page.goto(MATCHUP_URL);
   await page.locator(panel('.app.whatif .mu-head')).waitFor({ timeout: 30000 });
   assert.doesNotMatch(await page.locator(panel('.mu-head')).textContent(), /157\.23/);
@@ -1252,7 +1258,7 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
     { id: 'guard', pos: 'PG', stats: { fpts_proj: 31, pts: 29, reb: 2, gp: 1 } },
     { id: 'rebounder', pos: 'C', stats: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 } },
   ]);
-  await page.goto(PLAYERS_URL);
+  await page.goto(`${PLAYERS_URL}?snp-admin=1`);
   const labels = () => page.locator('.stat-key-header .label').allTextContents();
   const order = () => page.locator('.player-list-item').evaluateAll((rows) => rows.map((r) => r.dataset.id));
   // FPTS, admin FPTS, admin Delta, then PTS and REB.
@@ -1317,6 +1323,17 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   await page.locator(corner('[data-wi="reset"]')).click();
   await shown('rebounder', '0');
   assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0']);
+  await page.keyboard.press('Escape');
+
+  // ?snp-admin=0 (here pushed the way Sleeper's router moves) takes the columns and the control away, and it sticks.
+  await page.evaluate(() => history.pushState({}, '', `${location.pathname}?snp-admin=0`));
+  await page.waitForFunction(() => document.querySelectorAll('.stat-key-header .label').length === 9);
+  assert.deepEqual(await labels(), ['FPTS', 'MIN', 'PTS', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO']);
+  await page.locator(corner('.wi-dock')).waitFor({ state: 'detached' });
+  await page.goto(PLAYERS_URL);
+  await page.waitForTimeout(1500);
+  assert.equal((await labels()).length, 9, 'still off after a reload');
+  assert.equal(await page.locator(corner('.wi-dock')).count(), 0);
   documentBody = LOGGED_OUT;
 });
 
