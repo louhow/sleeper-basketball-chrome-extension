@@ -1,7 +1,7 @@
 // Team tab, laid out like the mobile app: team card, lineup by slot with each
 // player's match and points, then bench and injured reserve. Pure: state -> HTML.
 (globalThis.SEP ||= {}).team = (() => {
-  const { playerGames, weekTotals, spotRefs, swapTargets, reserveEligible } = globalThis.SEP.model;
+  const { playerGames, weekTotals, spotRefs, swapTargets, started } = globalThis.SEP.model;
   const { esc, f2, teamName, ownerName, avatarImg, record, slotBadge, weekNav, lineup, teamTotals, reserveRule, nextGameText, gameChips, playerLine, pct, roleName } = globalThis.SEP.ui;
 
   function render(s) {
@@ -93,6 +93,15 @@
     return groups;
   }
 
+  // The next opponent's record and last five results, e.g. "(6-0-1) W W D W L".
+  function opponentForm(s, games) {
+    const next = games.find((g) => !started(g.game, s.now)) || games.at(-1);
+    const club = next && s.clubs?.[next.opponent];
+    if (!club) return '';
+    const form = club.form.map((r) => `<i class="${r.toLowerCase()}" title="${r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}">${r}</i>`).join('');
+    return ` <span class="rec" title="${esc(`${club.abbr}: ${club.record} (wins-draws-losses), last ${club.form.length}`)}">(${esc(club.record)})</span>${form ? ` <span class="form">${form}</span>` : ''}`;
+  }
+
   function cardClass({ s, editable, selecting, targets }, spot) {
     if (!editable || !spot) return '';
     if (s.swap === spot) return ' selected';
@@ -118,7 +127,7 @@
       ${playerLine(s, id, { sub })}
       <div class="match">
         <span class="chips">${gameChips(games, s.now)}</span>
-        <span class="when">${esc(nextGameText(games, s.now))}</span>
+        <span class="when">${esc(nextGameText(games, s.now))}${opponentForm(s, games)}</span>
       </div>
       <div class="week-pts">
         <b>${t.played ? f2(t.points) : '–'}</b>

@@ -333,6 +333,7 @@
         minWeek: league.settings?.start_week || 1,
         maxWeek: Math.max(league.settings?.playoff_week_start || 0, ...(scheduleRows || []).map((g) => g.week || 0)) || 38,
         schedule: scheduleRows || [],
+        clubs: model.clubForms(scheduleRows || []),
         weeks: {},
         cards: {},
       });

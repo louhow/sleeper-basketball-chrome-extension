@@ -493,7 +493,37 @@
     return 'free_agent';
   }
 
+  // Each club's record and recent form from Sleeper's fixture list, which
+  // carries a club's record (wins-draws-losses) after every match it has
+  // played. Comparing consecutive records gives the result of each match.
+  //   -> { [teamId]: { abbr, record: "6-0-1", form: ['W', 'D', ...] (oldest first, last 5) } }
+  function clubForms(schedule, last = 5) {
+    const byTeam = {};
+    const parse = (text) => String(text || '').split('-').map((n) => Number(n) || 0);
+    for (const g of schedule || []) {
+      if (g.status !== 'complete') continue;
+      for (const side of [g.home, g.away]) {
+        if (!side?.team) continue;
+        (byTeam[side.team] ||= { abbr: side.abbr, games: [] }).games.push({ week: g.week, date: g.date, record: parse(side.record) });
+      }
+    }
+    const out = {};
+    for (const [team, { abbr, games }] of Object.entries(byTeam)) {
+      games.sort((a, b) => a.week - b.week || String(a.date).localeCompare(String(b.date)));
+      let prev = [0, 0, 0];
+      const form = [];
+      for (const g of games) {
+        const [w, d, l] = g.record;
+        form.push(w > prev[0] ? 'W' : d > prev[1] ? 'D' : l > prev[2] ? 'L' : '?');
+        prev = g.record;
+      }
+      out[team] = { abbr, record: games.at(-1)?.record.join('-') || '0-0-0', form: form.slice(-last) };
+    }
+    return out;
+  }
+
   return {
+    clubForms,
     gamesFromScores, gamesByTeam, pointsByGame, playerGames, weekTotals, started, finished,
     slotAccepts, fits, reserveEligible, spotOf, spotRefs, swapTargets, applyMove, describeMove,
     parseFormation, savedFormation, slotLabels, formationOf, FORMATION_ORDER,

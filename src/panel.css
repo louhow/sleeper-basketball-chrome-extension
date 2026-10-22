@@ -285,6 +285,12 @@ button.slot:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(255,
 .match { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
 .match .when { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--muted); }
 .match .chips { flex: none; }
+.match .rec { color: var(--text); font-variant-numeric: tabular-nums; }
+.form { display: inline-flex; gap: 2px; vertical-align: 1px; }
+.form i { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 3px; font-style: normal; font-size: 9px; font-weight: 900; color: #0d1421; background: rgba(255, 255, 255, 0.25); }
+.form .w { background: var(--accent); }
+.form .d { background: var(--muted); }
+.form .l { background: var(--danger); }
 .match .chips:empty { display: none; }
 .chips { display: inline-flex; gap: 4px; }
 .chip { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 255, 255, 0.08); }
