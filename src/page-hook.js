@@ -72,8 +72,9 @@
   // control; adminDelta is how many places that moves a player in the list on
   // screen. Both go into Sleeper's own table component (its stat keys and
   // per-player stats map), so Sleeper renders them and its headers sort them.
-  const ADMIN_KEY = 'adminFPTS';
-  const DELTA_KEY = 'adminDelta';
+  // Sleeper prints a stat key as its header; the space lets each wrap onto two lines.
+  const ADMIN_KEY = 'admin FPTS';
+  const DELTA_KEY = 'admin Delta';
   // Sleeper sorts a missing or 0 value as -1, so shifts are stored offset to stay positive.
   const DELTA_OFFSET = 10000;
   const PLAYERS_PANEL = '.integration-players-panel';
@@ -220,14 +221,20 @@
     if (document.documentElement.dataset.snpNbaLeague && document.querySelector(PLAYERS_PANEL)) patchPlayers();
   }, 500);
 
-  // Sleeper's header cells are 60px and uppercase; the labels read as named and fit on one line.
+  // Sleeper's rows are 796px with 60px stat columns after a fixed name area,
+  // which fits its 9 columns. With 11, every column narrows to 54px so all fit,
+  // and the name area may not shrink, so values stay under their headers.
+  // Our headers read as named (not uppercase), on two lines.
   // adminFPTS wears the what-if color once a value differs from the league's.
+  const ours = ':is(:nth-child(2 of .label), :nth-child(3 of .label))';
   const adminStyle = document.createElement('style');
   adminStyle.textContent = `
-    html[data-snp-admin-col] ${PLAYERS_PANEL} .stat-key-header > :is(:nth-child(2 of .label), :nth-child(3 of .label)) span {
-      text-transform: none; font-size: 11px; letter-spacing: -0.2px; white-space: nowrap;
+    html[data-snp-admin-col] ${PLAYERS_PANEL} :is(.stat-key-header > .label, .player-list-item > .cell) { flex-basis: 54px !important; }
+    html[data-snp-admin-col] ${PLAYERS_PANEL} .player-list-item > .player-meta-container { flex-shrink: 0 !important; }
+    html[data-snp-admin-col] ${PLAYERS_PANEL} .stat-key-header > ${ours} span {
+      text-transform: none; font-size: 10px; line-height: 11px; white-space: normal;
     }
-    html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > :is(:nth-child(2 of .label), :nth-child(3 of .label)) span,
+    html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > ${ours} span,
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .player-list-item > :nth-child(2 of .cell) { color: #b69cff !important; }
     ${PLAYERS_PANEL} [data-snp-delta] { font-size: 0 !important; }
     ${PLAYERS_PANEL} .snp-delta {

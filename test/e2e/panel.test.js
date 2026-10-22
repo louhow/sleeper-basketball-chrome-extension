@@ -98,7 +98,13 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
   .integration-players-panel { position: absolute; left: 264px; top: 100px; width: 800px; }
   .stat-key-header, .player-list-item { display: flex; gap: 8px; padding: 10px 24px; }
   .stat-key-header { padding-left: 184px; }
-  .label, .cell { display: flex; justify-content: center; align-items: center; flex: 0 0 60px; cursor: pointer; font-size: 12px; }
+  .integration-players-panel .stat-key-header { padding-left: 176px; }
+  .player-list-item { width: 796px; overflow: hidden; box-sizing: border-box; padding: 0; gap: 0; }
+  .owner-cell { flex: 0 0 32px; margin-left: 9px; }
+  .player-meta-container { flex: 0 1 auto; width: 135px; min-width: 90px; }
+  .label, .cell { display: flex; align-items: center; flex: 0 0 60px; margin-left: 2px; cursor: pointer; font-size: 12px; }
+  .cell { justify-content: center; }
+  .stat-key-header { gap: 0; padding-top: 0; padding-bottom: 0; }
   .label span { text-transform: uppercase; }
   .name { width: 160px; }
   .filters button { margin: 0 4px 8px 24px; }
@@ -106,14 +112,15 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
 <div class="integration-players-panel"><div class="filters"><button data-pos="ALL">ALL</button><button data-pos="PG">PG</button></div>
   <div class="player-table"><div class="table-header"><div class="stat-key-header nba"></div></div><div class="ReactVirtualized__Grid"></div></div></div>
 <script>
-  const LABELS = { fpts_proj: 'FPTS', pts: 'PTS', reb: 'REB' };
+  const LABELS = { fpts_proj: 'FPTS', sp: 'MIN', pts: 'PTS', tpm: '3PM', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' };
   const PLAYERS = ${JSON.stringify(players)};
   const fiberOf = (props, depth = 0) => (depth ? { memoizedProps: {}, return: fiberOf(props, depth - 1) } : { memoizedProps: props });
   const panel = {
     props: { leagueId: '${LEAGUE}', sport: 'nba', scoringSettings: { pts: 1, reb: 1 } },
     state: {
       playerStatsMap: Object.fromEntries(PLAYERS.map((p) => [p.id, p.stats])),
-      statKeys: ['fpts_proj', 'pts', 'reb'], statType: 'proj', sort: 'fpts_proj', positionFilter: 'ALL',
+      // Sleeper's NBA projection columns; the ones a test doesn't set print "-".
+      statKeys: ['fpts_proj', 'sp', 'pts', 'tpm', 'reb', 'ast', 'stl', 'blk', 'to'], statType: 'proj', sort: 'fpts_proj', positionFilter: 'ALL',
     },
     setState(update) {
       this.state = { ...this.state, ...(typeof update === 'function' ? update(this.state) : update) };
@@ -128,7 +135,7 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
     if (sort) view.sort((a, b) => (map[b.player_id][sort] || -1) - (map[a.player_id][sort] || -1));
     const grid = document.querySelector('.ReactVirtualized__Grid');
     grid.__reactInternalInstance$test = fiberOf({ players: view, playerStatsMap: map }, 3);
-    grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="name">' + id + '</div>' +
+    grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="owner-cell"></div><div class="player-meta-container">' + id + '</div>' +
       statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
     for (const row of grid.children) row.__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: { player: { player_id: row.dataset.id } } } };
   }
@@ -1246,14 +1253,25 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   await page.goto(PLAYERS_URL);
   const labels = () => page.locator('.stat-key-header .label').allTextContents();
   const order = () => page.locator('.player-list-item').evaluateAll((rows) => rows.map((r) => r.dataset.id));
-  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).evaluateAll((els) => els.map((el) => el.querySelector('.snp-delta')?.textContent ?? el.textContent));
+  // FPTS, admin FPTS, admin Delta, then PTS and REB.
+  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).evaluateAll((els) => els.map((el) => el.querySelector('.snp-delta')?.textContent ?? el.textContent))
+    .then((all) => [...all.slice(0, 3), all[4], all[6]]);
   const badge = (id) => page.locator(`.player-list-item[data-id="${id}"] .snp-delta`);
   const shown = async (id, text) => page.waitForFunction(([i, t]) => document.querySelector(`.player-list-item[data-id="${i}"] .snp-delta`)?.textContent === t, [id, text]);
-  await page.waitForFunction(() => [...document.querySelectorAll('.stat-key-header .label')].some((l) => l.textContent === 'adminDelta'), null, { timeout: 30000 });
-  assert.deepEqual(await labels(), ['FPTS', 'adminFPTS', 'adminDelta', 'PTS', 'REB'], 'right after FPTS');
+  await page.waitForFunction(() => [...document.querySelectorAll('.stat-key-header .label')].some((l) => l.textContent === 'admin Delta'), null, { timeout: 30000 });
+  assert.deepEqual(await labels(), ['FPTS', 'admin FPTS', 'admin Delta', 'MIN', 'PTS', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO'], 'right after FPTS');
   await shown('rebounder', '0');
   assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0'], 'matches FPTS until a value changes, so nobody moves');
   assert.equal(await page.locator('.stat-key-header .label span').nth(1).evaluate((el) => getComputedStyle(el).textTransform), 'none', 'reads as named');
+  // Every value sits under its header, and all 11 columns fit in Sleeper's 796px row.
+  const layout = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.stat-key-header .label')].map((l) => l.getBoundingClientRect());
+    const row = document.querySelector('.player-list-item');
+    const cellBoxes = [...row.querySelectorAll('.cell')].map((c) => c.getBoundingClientRect());
+    return { offsets: labels.map((l, i) => Math.round(cellBoxes[i].x - l.x)), overflow: Math.round(cellBoxes.at(-1).right - row.getBoundingClientRect().right) };
+  });
+  assert.deepEqual(layout.offsets, Array(11).fill(0), 'columns line up');
+  assert.ok(layout.overflow <= 0, `the last column fits (${layout.overflow}px over)`);
 
   // The Scoring control is here too; changing a value rescores and reranks.
   await page.locator(corner('[data-wi="toggle-open"]')).click();
@@ -1271,9 +1289,9 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
 
   // All three columns sort from their headers.
   assert.deepEqual(await order(), ['scorer', 'guard', 'rebounder'], 'sorted by FPTS');
-  await page.locator('.stat-key-header .label', { hasText: 'adminFPTS' }).click();
+  await page.locator('.stat-key-header .label', { hasText: 'admin FPTS' }).click();
   assert.deepEqual(await order(), ['rebounder', 'scorer', 'guard'], 'sorted by adminFPTS');
-  await page.locator('.stat-key-header .label', { hasText: 'adminDelta' }).click();
+  await page.locator('.stat-key-header .label', { hasText: 'admin Delta' }).click();
   assert.equal((await order())[0], 'rebounder', 'sorted by adminDelta, biggest riser first');
   await shown('rebounder', '+2');
   await page.screenshot({ path: `${OUT}whatif-players.png` });
