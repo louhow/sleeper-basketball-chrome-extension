@@ -195,6 +195,9 @@ button.optimize:hover:not(:disabled) { background: rgba(0, 206, 184, 0.24); }
 
 /* Roster rows */
 .rhead { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 6px; }
+.group-head { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 4px; padding-left: 2px; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.group-head span { color: var(--text); }
+.group-head:first-child { margin-top: 0; }
 .rhead h3 { margin: 0; font-size: 15px; }
 .rcols, .card {
   display: grid;
@@ -424,7 +427,10 @@ th.num, td.num { text-align: right; }
 .txs { margin: 0; padding: 0; list-style: none; }
 .tx { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .tx-head { margin-bottom: 6px; font-size: 13px; }
-.tx-players { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.tx-players { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 18px; }
+.tx-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tx-col:empty { display: none; }
+@container (max-width: 560px) { .tx-players { grid-template-columns: minmax(0, 1fr); } }
 .status {
   flex: none;
   min-width: 56px;

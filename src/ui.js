@@ -118,6 +118,11 @@
     return s.notice ? `<p class="notice ${esc(s.notice.kind)}" role="status">${esc(s.notice.text)}</p>` : '';
   }
 
+  const ROLE_ORDER = ['F', 'M', 'D', 'GK'];
+  const ROLE_NAMES = { F: 'Forwards', M: 'Midfielders', D: 'Defenders', GK: 'Goalkeeper' };
+  const roleRank = (label) => (ROLE_ORDER.includes(label) ? ROLE_ORDER.indexOf(label) : ROLE_ORDER.length);
+  const roleName = (label, n) => (n === 1 && label !== 'GK' ? ROLE_NAMES[label]?.replace(/s$/, '') : ROLE_NAMES[label]) || label;
+
   const owns = (s, roster) => s.me != null && roster != null && (roster.owner_id === s.me || (roster.co_owners || []).includes(s.me));
   const myRoster = (s) => s.rosters?.find((r) => owns(s, r)) ?? null;
 
@@ -151,8 +156,10 @@
       }
     }
     const labels = slotLabels(slots, starters, s.players, savedFormation(roster, s.week));
+    // Starter indexes grouped by formation role, forwards first, as the app lays a formation out.
+    const order = slots.map((_, i) => i).sort((a, b) => roleRank(labels[a]) - roleRank(labels[b]) || a - b);
     return {
-      roster, week, slots, labels, formation: formationOf(labels), leg, starters, bench, reserve, players: s.players, settings,
+      roster, week, slots, labels, order, formation: formationOf(labels), leg, starters, bench, reserve, players: s.players, settings,
       locked, mine, editable,
       reserveEditable: editable && (settings.reserve_slots || 0) > 0 && s.week === s.currentWeek,
       reserveRoom: Math.max(0, (settings.reserve_slots || 0) - reserve.length),
@@ -213,6 +220,6 @@
   return {
     esc, f2, f1, CDN, headshot, teamLogo, teamName, ownerName, avatar, avatarImg, record, shortName, injuryTag, positions,
     gameTime, weekday, shortDate, slotBadge, nextGameText, gameChips, dialog, dialogErrors, weekNav, notice,
-    owns, myRoster, ownerOf, lineup, teamTotals, reserveRule, pct, playerLine, positionRank,
+    owns, myRoster, ownerOf, lineup, teamTotals, reserveRule, pct, playerLine, positionRank, roleName,
   };
 })();

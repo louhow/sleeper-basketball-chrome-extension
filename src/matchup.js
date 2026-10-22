@@ -2,7 +2,7 @@
 // slot, with win probability and each player's match. Pure: state -> HTML.
 (globalThis.SEP ||= {}).matchup = (() => {
   const { playerGames, weekTotals, winProbability, started } = globalThis.SEP.model;
-  const { esc, f2, teamName, ownerName, avatarImg, record, shortName, injuryTag, positions, headshot, slotBadge, weekNav, lineup, teamTotals, gameChips, weekday, gameTime } = globalThis.SEP.ui;
+  const { esc, f2, teamName, ownerName, avatarImg, record, shortName, injuryTag, positions, headshot, slotBadge, weekNav, lineup, teamTotals, gameChips, weekday, gameTime, roleName } = globalThis.SEP.ui;
 
   function render(s) {
     if (s.error) return `<p class="msg error">${esc(s.error)}</p>`;
@@ -32,7 +32,11 @@
         <div><h3>Starters <span class="formation">${esc(mine.formation)}</span>${right ? ` <span class="sub">vs ${esc(theirs.formation)}</span>` : ''}</h3></div>
         ${weekNav(s)}
       </div>
-      ${mine.slots.map((slot, i) => row(s, slot, left, mine.starters[i], right, theirs?.starters[i], mine.labels[i])).join('')}
+      ${globalThis.SEP.team.roleGroups(mine).map(({ label, indexes }) => `<h3 class="mu-title">${esc(roleName(label, indexes.length))} <span class="sub">${indexes.length}</span></h3>${indexes.map((i) => {
+        const k = mine.order.indexOf(i);
+        const j = theirs?.order[k];
+        return row(s, mine.slots[i], left, mine.starters[i], right, j == null ? null : theirs.starters[j], mine.labels[i]);
+      }).join('')}`).join('')}
       ${rows('Bench', mine.bench, theirs?.bench || [], 'BN')}
       ${rows('Injured Reserve', mine.reserve, theirs?.reserve || [], 'IR', settings.reserve_slots)}`;
   }

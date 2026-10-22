@@ -2,7 +2,7 @@
 // player's match and points, then bench and injured reserve. Pure: state -> HTML.
 (globalThis.SEP ||= {}).team = (() => {
   const { playerGames, weekTotals, spotRefs, swapTargets, reserveEligible } = globalThis.SEP.model;
-  const { esc, f2, teamName, ownerName, avatarImg, record, slotBadge, weekNav, lineup, teamTotals, reserveRule, nextGameText, gameChips, playerLine, pct, myRoster } = globalThis.SEP.ui;
+  const { esc, f2, teamName, ownerName, avatarImg, record, slotBadge, weekNav, lineup, teamTotals, reserveRule, nextGameText, gameChips, playerLine, pct, roleName } = globalThis.SEP.ui;
 
   function render(s) {
     if (s.error) return `<p class="msg error">${esc(s.error)}</p>`;
@@ -77,9 +77,20 @@
     return `
       ${lineupHead}
       <div class="rcols"><span>Pos</span><span>Player</span><span class="rc-match">Match</span><span class="rc-pts">Pts</span></div>
-      ${l.starters.map((id, i) => card(l.slots[i] ?? 'FLEX', id, `s:${i}`, l.labels[i])).join('')}
+      ${roleGroups(l).map(({ label, indexes }) => `<div class="group-head">${esc(roleName(label, indexes.length))} <span>${indexes.length}</span></div>${indexes.map((i) => card(l.slots[i] ?? 'FLEX', l.starters[i], `s:${i}`, l.labels[i])).join('')}`).join('')}
       ${benchCards ? `${sectionHead('Bench')}${benchCards}` : ''}
       ${l.reserve.length || settings.reserve_slots ? `${sectionHead('Injured Reserve', l.reserveEditable ? esc(reserveRule(settings)) : '')}${reserveCards}` : ''}`;
+  }
+
+  // Starter indexes by formation role, in the order the lineup shows them.
+  function roleGroups(l) {
+    const groups = [];
+    for (const i of l.order) {
+      const label = l.labels[i];
+      if (groups.at(-1)?.label === label) groups.at(-1).indexes.push(i);
+      else groups.push({ label, indexes: [i] });
+    }
+    return groups;
   }
 
   function cardClass({ s, editable, selecting, targets }, spot) {
@@ -116,5 +127,5 @@
     </article>`;
   }
 
-  return { render, teamCard };
+  return { render, teamCard, roleGroups };
 })();

@@ -90,7 +90,7 @@
       const when = new Date(t.status_updated || t.created).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       return `<li class="tx">
         <div class="tx-head"><b>${esc(who)}</b> <span class="sub">${esc(kind)}${bid} · ${esc(when)}</span>${failed}</div>
-        <div class="tx-players">${Object.keys(t.adds || {}).map((id) => player(id, '+')).join('')}${Object.keys(t.drops || {}).map((id) => player(id, '−')).join('')}</div>
+        <div class="tx-players"><div class="tx-col">${Object.keys(t.adds || {}).map((id) => player(id, '+')).join('')}</div><div class="tx-col">${Object.keys(t.drops || {}).map((id) => player(id, '−')).join('')}</div></div>
         ${t.metadata?.notes ? `<div class="sub">${esc(t.metadata.notes)}</div>` : ''}
       </li>`;
     });
