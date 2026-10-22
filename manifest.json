@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Sleeper EPL",
+  "version": "0.1.0",
+  "description": "Fills Sleeper's empty web page for Premier League (clubsoccer:epl) fantasy leagues with the mobile app's Match, Team, Players and League tabs: rosters, projections, lineup changes, adds, drops, waiver bids and player cards.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.sleeper.app/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sleeper.com/*"
+      ],
+      "js": [
+        "src/scoring.js",
+        "src/model.js",
+        "src/api.js",
+        "src/ui.js",
+        "src/team.js",
+        "src/matchup.js",
+        "src/league.js",
+        "src/players.js",
+        "src/card.js",
+        "src/dialogs.js",
+        "src/view.js",
+        "src/content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/panel.css"
+      ],
+      "matches": [
+        "https://sleeper.com/*"
+      ]
+    }
+  ]
+}
