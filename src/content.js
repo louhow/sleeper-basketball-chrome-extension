@@ -107,90 +107,102 @@
     let seasonLoading = false;
     const api = createApi(schedule);
 
-    // Mounts the panel in place of Sleeper's placeholder, or floats it when
-    // there's none. Sleeper centers the placeholder inside a fixed-height box,
-    // so the box is pinned to a top-aligned column, its other children are
-    // hidden, and the panel gets an explicit height down to the bottom of the
-    // window so its own body scrolls.
-    const BOTTOM_GAP = 16;
+    // Mounts the panel over Sleeper's placeholder box, or floats it when
+    // there's none. Sleeper centers the placeholder inside a box whose layout
+    // isn't ours to guess at, so the panel is laid over the whole box
+    // (absolute, edge to edge), the box's own children are hidden from view
+    // but left in the flow (they may be what gives the box its height), and
+    // the API tab records the chain it found.
+    // Elements that mark Sleeper's own chrome (header, tabs, chat): the climb never crosses them.
+    const CHROME = 'h1, h2, h3, nav, input, select, textarea, button, a, [role="button"]';
     function attach() {
       if (destroyed || disabled) return;
-      const placeholder = findPlaceholder();
-      if (placeholder) {
-        const parent = placeholder.parentElement;
-        if (hidden?.parent !== parent) {
+      const box = findBox();
+      if (box) {
+        if (hidden?.parent !== box) {
           restorePlaceholder();
-          hidden = { parent, els: [], css: parent.style.cssText };
-          // Siblings go too, unless one of them is Sleeper's own header or tabs.
-          const chrome_ = 'h1, h2, h3, nav, input, select';
-          hidden.all = ![...parent.children].some((c) => c !== placeholder && c !== host && (c.matches(chrome_) || c.querySelector(chrome_)));
-          parent.style.setProperty('display', 'flex', 'important');
-          parent.style.setProperty('flex-direction', 'column', 'important');
-          parent.style.setProperty('justify-content', 'flex-start', 'important');
-          parent.style.setProperty('align-items', 'stretch', 'important');
-          parent.style.setProperty('overflow', 'hidden', 'important');
+          hidden = { parent: box, els: [], css: box.style.cssText };
+          box.style.setProperty('position', 'relative', 'important');
+          box.style.setProperty('overflow', 'hidden', 'important');
+          logMount(box);
         }
-        for (const c of parent.children) {
-          if (c === host || hidden.els.includes(c) || (c !== placeholder && !hidden.all)) continue;
+        for (const c of box.children) {
+          if (c === host || hidden.els.includes(c)) continue;
           hidden.els.push(c);
-          c.style.setProperty('display', 'none', 'important');
+          c.style.setProperty('visibility', 'hidden', 'important');
+          c.style.setProperty('pointer-events', 'none', 'important');
         }
-        if (host.parentElement !== parent) {
+        if (host.parentElement !== box) {
           host.classList.remove('floating');
-          parent.append(host);
+          host.classList.add('cover');
+          box.append(host);
         }
-        fitHeight();
+        fitHeight(box);
       } else if (!host.isConnected && Date.now() - mountedAt > FLOAT_AFTER_MS) {
         host.classList.add('floating');
         document.documentElement.appendChild(host);
       }
     }
 
-    // The panel runs from where it sits to the bottom of the window.
-    function fitHeight() {
-      if (host.classList.contains('floating') || !host.isConnected) return;
-      const top = host.getBoundingClientRect().top;
-      if (!(top >= 0 && top < innerHeight - 200)) return;
-      const height = `${Math.round(innerHeight - top - BOTTOM_GAP)}px`;
-      if (host.style.height !== height) host.style.height = height;
+    // A box too short to be the page's main area (its height came from the
+    // placeholder we're hiding, say) gets an explicit height down to the window's bottom.
+    const BOTTOM_GAP = 16;
+    function fitHeight(box) {
+      const rect = box.getBoundingClientRect();
+      const wanted = rect.height < 320 && rect.top >= 0 && rect.top < innerHeight - 200 ? `${Math.round(innerHeight - rect.top - BOTTOM_GAP)}px` : '';
+      if (wanted) box.style.setProperty('height', wanted, 'important');
+      else if (box.style.height) box.style.removeProperty('height');
     }
 
     function restorePlaceholder() {
       if (!hidden) return;
-      for (const el of hidden.els) el.style.removeProperty('display');
+      for (const el of hidden.els) {
+        el.style.removeProperty('visibility');
+        el.style.removeProperty('pointer-events');
+      }
       hidden.parent.style.cssText = hidden.css;
       hidden = null;
-      host.style.height = '';
+      host.classList.remove('cover');
     }
 
-    // Sleeper's "not supported on web yet" block: by class when it has the one
-    // its NBA tabs use, else the block of text that says so.
-    function findPlaceholder() {
-      const byClass = document.querySelector('.empty-panel-container');
-      if (byClass) return byClass;
+    // Sleeper's box around its "not supported on web yet" block: found by the
+    // class its NBA tabs use, else by the text, then climbed to the highest
+    // ancestor that has no Sleeper chrome (header, tabs, chat) beside it.
+    function findBox() {
       const scope = document.querySelector('main, .main-content, #__next, body');
       if (!scope) return null;
-      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
-        acceptNode: (node) => (PLACEHOLDER_TEXT.test(node.data) && !host.contains(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
-      });
-      const text = walker.nextNode();
-      if (!text) return null;
-      // Climb to the block that holds the illustration, the text and the store
-      // badges: keep going while the parent still holds little else (by text),
-      // so the league header and chat beside it are never swallowed.
-      // The placeholder is a small centered block inside a tall panel, so the
-      // climb also stops once the block already fills its parent.
-      let el = text.parentElement;
-      for (let i = 0; i < 6; i++) {
+      let el = document.querySelector('.empty-panel-container');
+      if (!el) {
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) => (PLACEHOLDER_TEXT.test(node.data) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+        });
+        el = walker.nextNode()?.parentElement;
+      }
+      if (!el) return null;
+      for (let i = 0; i < 8; i++) {
         const parent = el.parentElement;
         if (!parent || parent === scope || parent === document.body) break;
-        if ((parent.textContent || '').trim().length > 400 || parent.querySelector('h1, h2, h3, nav, input')) break;
-        const own = el.getBoundingClientRect();
-        const outer = parent.getBoundingClientRect();
-        if (outer.height > 0 && own.height >= 0.7 * outer.height && own.width >= 0.7 * outer.width) break;
+        const siblings = [...parent.children].filter((c) => c !== el && c !== host);
+        if (siblings.some((c) => c.matches(CHROME) || c.querySelector(CHROME))) break;
+        if ((parent.textContent || '').trim().length > 600) break;
         el = parent;
       }
       return el;
+    }
+
+    // The box and its ancestors (tag, classes, size), for the API tab.
+    function logMount(box) {
+      const chain = [];
+      for (let el = box, i = 0; el && el !== document.body && i < 8; el = el.parentElement, i++) {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        chain.push({
+          tag: el.tagName.toLowerCase(), class: el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : '',
+          size: `${Math.round(r.width)}x${Math.round(r.height)} @${Math.round(r.top)}`, display: cs.display, position: cs.position,
+          justify: cs.justifyContent, align: cs.alignItems, children: el.children.length,
+        });
+      }
+      api.cached(`mount: box ${chain.length ? `${chain[0].tag}${chain[0].class ? `.${chain[0].class.split(' ')[0]}` : ''} ${chain[0].size}` : '?'}`, chain, 0);
     }
 
     function schedule() {

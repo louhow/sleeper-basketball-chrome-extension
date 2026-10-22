@@ -10,7 +10,10 @@
   min-width: 0;
   overflow: hidden;
 }
-:host(.floating) {
+:host(.cover) {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   height: auto;
 }
 :host(.floating) {
