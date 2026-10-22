@@ -89,23 +89,32 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
 
 // Sleeper's NBA Players table (inspected 2026-10-22), reduced to its stateful
 // component: per-player stats keyed by stat (`playerStatsMap`, with FPTS already
-// scored as fpts_proj), the stat columns (`statKeys`), and headers that toggle
-// the sort. Cells show a stat per game, as Sleeper's do.
-const playersTable = (stats) => `<!doctype html><title>Sleeper</title>
+// scored as fpts_proj), the stat columns (`statKeys`), headers that toggle the
+// sort, and a position filter. Its list component gets the filtered players,
+// and each row component its player, as React props. Cells show a stat per game, as Sleeper's do.
+const playersTable = (players) => `<!doctype html><title>Sleeper</title>
 <style>
   body { margin: 0; background: rgb(16, 33, 49); font-family: Lato, Arial, sans-serif; color: #fff; }
   .integration-players-panel { position: absolute; left: 264px; top: 100px; width: 800px; }
   .stat-key-header, .player-list-item { display: flex; gap: 8px; padding: 10px 24px; }
   .stat-key-header { padding-left: 184px; }
-  .label, .cell { width: 64px; text-align: center; cursor: pointer; }
+  .label, .cell { display: flex; justify-content: center; align-items: center; flex: 0 0 60px; cursor: pointer; font-size: 12px; }
+  .label span { text-transform: uppercase; }
   .name { width: 160px; }
+  .filters button { margin: 0 4px 8px 24px; }
 </style>
-<div class="integration-players-panel"><div class="player-table"><div class="table-header"><div class="stat-key-header nba"></div></div><div class="players-list"></div></div></div>
+<div class="integration-players-panel"><div class="filters"><button data-pos="ALL">ALL</button><button data-pos="PG">PG</button></div>
+  <div class="player-table"><div class="table-header"><div class="stat-key-header nba"></div></div><div class="ReactVirtualized__Grid"></div></div></div>
 <script>
-  const LABELS = { fpts_proj: 'FPTS', sp: 'MIN', pts: 'PTS', reb: 'REB' };
+  const LABELS = { fpts_proj: 'FPTS', pts: 'PTS', reb: 'REB' };
+  const PLAYERS = ${JSON.stringify(players)};
+  const fiberOf = (props, depth = 0) => (depth ? { memoizedProps: {}, return: fiberOf(props, depth - 1) } : { memoizedProps: props });
   const panel = {
     props: { leagueId: '${LEAGUE}', sport: 'nba', scoringSettings: { pts: 1, reb: 1 } },
-    state: { playerStatsMap: ${JSON.stringify(stats)}, statKeys: ['fpts_proj', 'pts', 'reb'], statType: 'proj', sort: 'fpts_proj' },
+    state: {
+      playerStatsMap: Object.fromEntries(PLAYERS.map((p) => [p.id, p.stats])),
+      statKeys: ['fpts_proj', 'pts', 'reb'], statType: 'proj', sort: 'fpts_proj', positionFilter: 'ALL',
+    },
     setState(update) {
       this.state = { ...this.state, ...(typeof update === 'function' ? update(this.state) : update) };
       render();
@@ -113,16 +122,22 @@ const playersTable = (stats) => `<!doctype html><title>Sleeper</title>
     },
   };
   function render() {
-    const { playerStatsMap: map, statKeys, sort } = panel.state;
+    const { playerStatsMap: map, statKeys, sort, positionFilter } = panel.state;
     document.querySelector('.stat-key-header').innerHTML = statKeys.map((k) => '<div class="label nba" data-key="' + k + '"><span>' + (LABELS[k] || k) + '</span></div>').join('');
-    const ids = Object.keys(map);
-    if (sort) ids.sort((a, b) => (map[b][sort] || -1) - (map[a][sort] || -1));
-    document.querySelector('.players-list').innerHTML = ids.map((id) => '<div class="player-list-item" data-id="' + id + '"><div class="name">' + id + '</div>' +
+    const view = PLAYERS.filter((p) => positionFilter === 'ALL' || p.pos === positionFilter).map((p) => ({ player_id: p.id }));
+    if (sort) view.sort((a, b) => (map[b.player_id][sort] || -1) - (map[a.player_id][sort] || -1));
+    const grid = document.querySelector('.ReactVirtualized__Grid');
+    grid.__reactInternalInstance$test = fiberOf({ players: view, playerStatsMap: map }, 3);
+    grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="name">' + id + '</div>' +
       statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
+    for (const row of grid.children) row.__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: { player: { player_id: row.dataset.id } } } };
   }
   document.querySelector('.stat-key-header').addEventListener('click', (e) => {
     const key = e.target.closest('.label')?.dataset.key;
     if (key) panel.setState({ sort: panel.state.sort === key ? '' : key });
+  });
+  document.querySelector('.filters').addEventListener('click', (e) => {
+    if (e.target.dataset.pos) panel.setState({ positionFilter: e.target.dataset.pos });
   });
   render();
   // React 16 internals: the panel div's fiber returns to the component's.
@@ -1222,41 +1237,61 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
   documentBody = LOGGED_OUT;
 });
 
-test('what-if scoring: the Players tab gets a sortable adminFPTS column beside FPTS', async () => {
-  documentBody = playersTable({
-    scorer: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 },
-    rebounder: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 },
-  });
+test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta columns beside FPTS', async () => {
+  documentBody = playersTable([
+    { id: 'scorer', pos: 'PG', stats: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 } },
+    { id: 'guard', pos: 'PG', stats: { fpts_proj: 31, pts: 29, reb: 2, gp: 1 } },
+    { id: 'rebounder', pos: 'C', stats: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 } },
+  ]);
   await page.goto(PLAYERS_URL);
   const labels = () => page.locator('.stat-key-header .label').allTextContents();
   const order = () => page.locator('.player-list-item').evaluateAll((rows) => rows.map((r) => r.dataset.id));
-  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).allTextContents();
-  await page.waitForFunction(() => [...document.querySelectorAll('.stat-key-header .label')].some((l) => l.textContent === 'adminFPTS'), null, { timeout: 30000 });
-  assert.deepEqual(await labels(), ['FPTS', 'adminFPTS', 'PTS', 'REB'], 'right after FPTS');
-  assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '10.0', '20.0'], 'matches FPTS until a value changes');
+  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).evaluateAll((els) => els.map((el) => el.querySelector('.snp-delta')?.textContent ?? el.textContent));
+  const badge = (id) => page.locator(`.player-list-item[data-id="${id}"] .snp-delta`);
+  const shown = async (id, text) => page.waitForFunction(([i, t]) => document.querySelector(`.player-list-item[data-id="${i}"] .snp-delta`)?.textContent === t, [id, text]);
+  await page.waitForFunction(() => [...document.querySelectorAll('.stat-key-header .label')].some((l) => l.textContent === 'adminDelta'), null, { timeout: 30000 });
+  assert.deepEqual(await labels(), ['FPTS', 'adminFPTS', 'adminDelta', 'PTS', 'REB'], 'right after FPTS');
+  await shown('rebounder', '0');
+  assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0'], 'matches FPTS until a value changes, so nobody moves');
+  assert.equal(await page.locator('.stat-key-header .label span').nth(1).evaluate((el) => getComputedStyle(el).textTransform), 'none', 'reads as named');
 
-  // The Scoring control is here too; changing a value rescores the column (and only it).
+  // The Scoring control is here too; changing a value rescores and reranks.
   await page.locator(corner('[data-wi="toggle-open"]')).click();
   const reb = page.locator(corner('input[data-wi-key="reb"]'));
   await reb.fill(String((await reb.inputValue()) * 1 + 2));
-  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="rebounder"] .cell:nth-child(3)')?.textContent === '70.0');
-  assert.deepEqual(await cells('scorer'), ['32.0', '36.0', '30.0', '2.0']);
+  await shown('rebounder', '+2');
+  assert.deepEqual(await cells('rebounder'), ['30.0', '70.0', '+2', '10.0', '20.0']);
+  assert.deepEqual(await cells('scorer'), ['32.0', '36.0', '−1', '30.0', '2.0']);
   const color = await page.locator('.player-list-item[data-id="rebounder"] .cell').nth(1).evaluate((el) => getComputedStyle(el).color);
-  assert.equal(color, 'rgb(182, 156, 255)', 'the what-if color once a value changes');
+  assert.equal(color, 'rgb(182, 156, 255)', 'adminFPTS in the what-if color once a value changes');
+  // Green up, red down, deeper for the bigger move.
+  assert.equal(await badge('rebounder').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(52, 168, 83, 0.9)');
+  assert.equal(await badge('scorer').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(214, 69, 80, 0.55)');
   await page.keyboard.press('Escape');
 
-  // Both columns sort from their headers.
-  assert.deepEqual(await order(), ['scorer', 'rebounder'], 'sorted by FPTS');
+  // All three columns sort from their headers.
+  assert.deepEqual(await order(), ['scorer', 'guard', 'rebounder'], 'sorted by FPTS');
   await page.locator('.stat-key-header .label', { hasText: 'adminFPTS' }).click();
-  assert.deepEqual(await order(), ['rebounder', 'scorer'], 'sorted by adminFPTS');
+  assert.deepEqual(await order(), ['rebounder', 'scorer', 'guard'], 'sorted by adminFPTS');
+  await page.locator('.stat-key-header .label', { hasText: 'adminDelta' }).click();
+  assert.equal((await order())[0], 'rebounder', 'sorted by adminDelta, biggest riser first');
+  await shown('rebounder', '+2');
   await page.screenshot({ path: `${OUT}whatif-players.png` });
   await page.locator('.stat-key-header .label', { hasText: /^FPTS$/ }).click();
-  assert.deepEqual(await order(), ['scorer', 'rebounder']);
+  assert.deepEqual(await order(), ['scorer', 'guard', 'rebounder']);
 
-  // Reset brings the column back to FPTS.
+  // Ranks are within the list on screen: among guards only, nobody moves.
+  await page.locator('.filters [data-pos="PG"]').click();
+  await shown('scorer', '0');
+  assert.equal(await badge('guard').textContent(), '0');
+  await page.locator('.filters [data-pos="ALL"]').click();
+  await shown('scorer', '−1');
+
+  // Reset brings adminFPTS back to FPTS.
   await page.locator(corner('[data-wi="toggle-open"]')).click();
   await page.locator(corner('[data-wi="reset"]')).click();
-  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="rebounder"] .cell:nth-child(3)')?.textContent === '30.0');
+  await shown('rebounder', '0');
+  assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0']);
   documentBody = LOGGED_OUT;
 });
 

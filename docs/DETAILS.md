@@ -81,9 +81,12 @@ While what-if is on, it's hard to miss:
 
 On the Players tab, an **adminFPTS** column sits right after Sleeper's FPTS (league scoring) and always uses the what-if values, switched on or not.
 It matches FPTS until a value changes, then turns purple.
-Click either header to sort by it, as with Sleeper's other columns.
-How it hooks in: `src/page-hook.js` adds `adminFPTS` to the stat keys and per-player stats of Sleeper's own table component, so Sleeper renders and sorts it.
-The value is Sleeper's FPTS plus the changed settings scored on their own (`snp:admin-score-request`, answered by the extension), so it never drifts from Sleeper's number.
+Next to it, **adminDelta** shows how many places adminFPTS moves each player compared with FPTS, within the list on screen (after Sleeper's position, search and owned filters), so filtering to centers ranks centers against each other.
+It reads "+3" on green for a riser and "−2" on red for a faller, deeper the bigger the move relative to the biggest one in the list; ties share a rank, so nobody moves until a value changes.
+Click any of the three headers to sort by it, as with Sleeper's other columns (adminDelta puts the biggest risers first).
+How it hooks in: `src/page-hook.js` adds `adminFPTS` and `adminDelta` to the stat keys and per-player stats of Sleeper's own table component, so Sleeper renders and sorts them.
+Sleeper prints every stat with one decimal, so adminDelta's cell gets a badge on top; the list on screen is read from Sleeper's list component (`players`).
+The value is Sleeper's FPTS plus the changed settings scored on their own (`snp:admin-score-request`, answered by the extension), so it never drifts from Sleeper's number; the rank shifts come back with it (`model.rankShift`).
 
 ### NFL: Optimize lineup
 

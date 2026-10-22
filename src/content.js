@@ -242,13 +242,19 @@
         detail: JSON.stringify({ leagueId, changed: Object.keys(state.whatIf.overrides).length > 0 }),
       }));
     }
+    // For each player: points the changed settings add to Sleeper's FPTS, and
+    // for the players in view, how many places that moves them (with its color).
     function adminDeltas(e) {
       const league = state.league?.scoring_settings || {};
       // Scoring with just the differences gives what they add on top of Sleeper's FPTS.
       const delta = Object.fromEntries(Object.entries(state.whatIf.overrides).map(([key, value]) => [key, value - (league[key] ?? 0)]));
-      const { stats } = JSON.parse(e.detail);
-      const out = Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, s ? scoring.scoreStats(delta, s) : 0]));
-      document.dispatchEvent(new CustomEvent('snp:admin-scores', { detail: JSON.stringify(out) }));
+      const { stats, view, base } = JSON.parse(e.detail);
+      const points = Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, s ? scoring.scoreStats(delta, s) : 0]));
+      const ids = view.filter((id) => stats[id]?.[base] != null);
+      const shifts = model.rankShift(ids, (id) => stats[id][base], (id) => stats[id][base] + points[id]);
+      const biggest = Math.max(0, ...Object.values(shifts).map(Math.abs));
+      const tints = Object.fromEntries(ids.map((id) => [id, model.shiftTint(shifts[id], biggest)]));
+      document.dispatchEvent(new CustomEvent('snp:admin-scores', { detail: JSON.stringify({ points, shifts, tints }) }));
     }
     document.addEventListener('snp:admin-score-request', adminDeltas);
 

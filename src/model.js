@@ -531,7 +531,32 @@
       bid(b) - bid(a) || priority(a) - priority(b) || String(a.transaction_id).localeCompare(String(b.transaction_id)));
   }
 
+  // How many places each player moves when a list is ranked by `after` instead
+  // of `before` (positive = up). Ties share a rank, as in standings, so nothing
+  // moves until a value changes.
+  function rankShift(ids, before, after) {
+    const ranks = (value) => {
+      const sorted = ids.map(value).sort((a, b) => b - a);
+      const first = new Map();
+      sorted.forEach((v, i) => { if (!first.has(v)) first.set(v, i + 1); });
+      return (id) => first.get(value(id));
+    };
+    const [was, now] = [ranks(before), ranks(after)];
+    return Object.fromEntries(ids.map((id) => [id, was(id) - now(id)]));
+  }
+
+  // Background for a rank shift: green up, red down, deeper the further it moves
+  // relative to the biggest move in the list. No move, no color.
+  const SHIFT_UP = '52, 168, 83';
+  const SHIFT_DOWN = '214, 69, 80';
+  function shiftTint(shift, biggest) {
+    if (!shift || !biggest) return '';
+    const strength = Math.min(1, Math.abs(shift) / biggest);
+    return `rgba(${shift > 0 ? SHIFT_UP : SHIFT_DOWN}, ${(0.2 + 0.7 * strength).toFixed(2)})`;
+  }
+
   return {
+    rankShift, shiftTint,
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen, reserveEligible,
     lockedGameId, lockState, scoreTier, bestLineup, bestNflLineup, cheapestAssignment, winProbability, standingsRanks,

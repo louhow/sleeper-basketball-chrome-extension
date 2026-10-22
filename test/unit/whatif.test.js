@@ -145,3 +145,18 @@ function render(s) {
   const html = view.render(s, []);
   return { html, out: text(html) };
 }
+
+test('rank shift: places moved when ranked by what-if points, ties sharing a rank', () => {
+  const before = { a: 32, b: 31, c: 30, d: 30 };
+  const after = { a: 36, b: 35, c: 70, d: 30 };
+  const json = (o) => JSON.stringify(o);
+  assert.equal(json(model.rankShift(['a', 'b', 'c', 'd'], (id) => before[id], (id) => after[id])), json({ a: -1, b: -1, c: 2, d: -1 }));
+  assert.equal(json(model.rankShift(['c', 'd'], (id) => before[id], (id) => before[id])), json({ c: 0, d: 0 }), 'nothing moves until a value changes');
+});
+
+test('shift tint: green up, red down, deeper with the size of the move', () => {
+  assert.equal(model.shiftTint(0, 4), '');
+  assert.equal(model.shiftTint(4, 4), 'rgba(52, 168, 83, 0.90)');
+  assert.equal(model.shiftTint(-1, 4), 'rgba(214, 69, 80, 0.38)');
+  assert.ok(model.shiftTint(-4, 4).endsWith('0.90)'), 'the biggest drop is the reddest');
+});
