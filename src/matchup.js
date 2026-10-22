@@ -2,6 +2,7 @@
 // slot, with win probability and each player's match. Pure: state -> HTML.
 (globalThis.SEP ||= {}).matchup = (() => {
   const { playerGames, weekTotals, winProbability, started } = globalThis.SEP.model;
+  const { breakdown } = globalThis.SEP.scoring;
   const { esc, f2, teamName, ownerName, avatarImg, record, shortName, injuryTag, positions, headshot, slotBadge, weekNav, lineup, teamTotals, gameChips, weekday, gameTime, roleName } = globalThis.SEP.ui;
 
   function render(s) {
@@ -29,14 +30,14 @@
       </section>
       ${noLegs ? '<p class="hint center">Matchup pairings come from Sleeper\'s logged-in API, which didn\'t answer; showing the roster\'s saved lineup.</p>' : ''}
       <div class="mu-starters">
-        <div><h3>Starters <span class="formation">${esc(mine.formation)}</span>${right ? ` <span class="sub">vs ${esc(theirs.formation)}</span>` : ''}</h3></div>
+        <div class="mu-forms"><b class="mine">${esc(mine.formation)}</b><span class="sub">Formation</span><b class="theirs">${theirs ? esc(theirs.formation) : '–'}</b></div>
         ${weekNav(s)}
       </div>
-      ${globalThis.SEP.team.roleGroups(mine).map(({ label, indexes }) => `<h3 class="mu-title">${esc(roleName(label, indexes.length))} <span class="sub">${indexes.length}</span></h3>${indexes.map((i) => {
-        const k = mine.order.indexOf(i);
+      ${Array.from({ length: Math.max(mine.order.length, theirs?.order.length || 0) }, (_, k) => {
+        const i = mine.order[k];
         const j = theirs?.order[k];
-        return row(s, mine.slots[i], left, mine.starters[i], right, j == null ? null : theirs.starters[j], mine.labels[i]);
-      }).join('')}`).join('')}
+        return pairRow(s, left, i, right, j);
+      }).join('')}
       ${rows('Bench', mine.bench, theirs?.bench || [], 'BN')}
       ${rows('Injured Reserve', mine.reserve, theirs?.reserve || [], 'IR', settings.reserve_slots)}`;
   }
@@ -67,6 +68,24 @@
     </div>`;
   }
 
+  // One row of starters: each side's k-th player in its own formation order.
+  // The badge shows both roles when the formations put different ones side by side.
+  function pairRow(s, left, i, right, j) {
+    const a = left.l;
+    const b = right?.l;
+    const labelA = i == null ? null : a.labels[i];
+    const labelB = j == null ? null : b.labels[j];
+    const slotA = i == null ? null : a.slots[i];
+    const badge = labelA && labelB && labelA !== labelB
+      ? `<span class="slot pair" title="${esc(`${labelA} vs ${labelB}`)}"><b class="${esc(labelA.toLowerCase())}">${esc(labelA)}</b><b class="${esc(labelB.toLowerCase())}">${esc(labelB)}</b></span>`
+      : slotBadge(slotA || b.slots[j], null, labelA || labelB);
+    return `<div class="mu-row">
+      ${i == null ? '<div class="mp mine empty"></div>' : playerSide(s, left, a.starters[i], 'mine')}
+      ${badge}
+      ${right && j != null ? playerSide(s, right, b.starters[j], 'theirs') : '<div class="mp theirs empty"></div>'}
+    </div>`;
+  }
+
   function row(s, slot, left, idA, right, idB, label) {
     return `<div class="mu-row">
       ${playerSide(s, left, idA, 'mine')}
@@ -86,6 +105,28 @@
     return [`${next.home ? 'vs' : '@'} ${next.opponentAbbr}`, live ? 'Live' : next.game.start ? `${weekday(next.game.date)} ${gameTime(next.game.start)}` : weekday(next.game.date)];
   }
 
+  // Stat abbreviations as the app prints them where they differ from Sleeper's keys.
+  const STAT_ABBR = { at: 'AST', sm: 'DRB', acnc: 'AC', yc2: 'YC2', hcs: 'HCS' };
+
+  // The scoring stats behind a played match, biggest first: "2 G, 3 KP, 1 AER".
+  function statLine(s, games) {
+    const totals = {};
+    for (const g of games) {
+      if (!g.played || !g.stats) continue;
+      for (const part of breakdown(s.league.scoring_settings || {}, g.stats)) {
+        const t = (totals[part.stat] ||= { value: 0, points: 0 });
+        t.value += part.value;
+        t.points += part.points;
+      }
+    }
+    return Object.entries(totals)
+      .filter(([stat]) => stat !== 'min')
+      .sort((x, y) => Math.abs(y[1].points) - Math.abs(x[1].points))
+      .slice(0, 5)
+      .map(([stat, t]) => `${Number.isInteger(t.value) ? t.value : t.value.toFixed(1)} ${STAT_ABBR[stat] || stat.toUpperCase()}`)
+      .join(', ');
+  }
+
   function playerSide(s, sd, id, cls) {
     if (!id || id === '0') return `<div class="mp ${cls} empty"><div class="headshot"></div><div class="mp-id"><span class="name">Empty</span></div></div>`;
     const p = s.players[id] || { name: `Player #${id}`, positions: [] };
@@ -101,6 +142,7 @@
       <div class="mp-id">
         <div class="name"><button class="name" data-player="${esc(id)}">${esc(shortName(p))}</button>${injuryTag(p)}</div>
         <div class="sub">${cls === 'theirs' ? `${chips}${who}` : `${who}${chips}`}</div>
+        ${st.played ? `<div class="mp-stats sub">${esc(statLine(s, st.games) || 'No scoring stats')}</div>` : ''}
       </div>
       <div class="mp-game"><b>${esc(opp)}</b><span class="sub">${esc(when)}</span></div>
       <div class="mp-pts"><b>${st.played ? f2(st.points) : '–'}</b><span>${st.any ? f2(st.proj) : ''}</span></div>

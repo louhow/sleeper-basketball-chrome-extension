@@ -375,18 +375,33 @@ h3.mu-title { margin: 14px 0 6px; }
 .mu-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 4px; }
 .mu-row > .slot { width: 48px; height: 30px; border-radius: 8px; }
 .mp {
+  min-height: 46px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 70px 54px;
   grid-template-areas: "hs id game pts";
   align-items: center;
   column-gap: 6px;
   min-width: 0;
-  height: 46px;
-  padding: 0 8px;
+  height: auto;
+  padding-left: 8px;
+  padding-right: 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
 }
+.mp-stats { margin-top: 2px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-forms { display: flex; align-items: baseline; gap: 10px; font-size: 16px; }
+.mu-forms b { font-weight: 900; font-variant-numeric: tabular-nums; }
+.mu-forms .mine { color: var(--accent); }
+.mu-forms .sub { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+.slot.pair { display: grid; grid-template-columns: 1fr 1fr; padding: 0; overflow: hidden; background: transparent; }
+.slot.pair b { display: grid; place-items: center; height: 100%; font-size: 11px; }
+.slot.pair .f { background: var(--f); }
+.slot.pair .m { background: var(--m); }
+.slot.pair .d { background: var(--d); }
+.slot.pair .gk { background: var(--gk); }
 .mp.theirs { grid-template-columns: 54px 70px minmax(0, 1fr) 28px; grid-template-areas: "pts game id hs"; text-align: right; }
 .mp.live { border-color: rgba(0, 206, 184, 0.4); }
 .mp .headshot { grid-area: hs; width: 28px; height: 28px; }
