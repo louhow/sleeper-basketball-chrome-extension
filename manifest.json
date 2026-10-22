@@ -25,6 +25,7 @@
         "src/optimize.js",
         "src/nfl.js",
         "src/card.js",
+        "src/whatif.js",
         "src/content.js"
       ],
       "run_at": "document_start"

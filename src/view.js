@@ -1,8 +1,8 @@
 // Pure render functions: (state, api log) -> HTML string for the shadow root.
 (globalThis.SNP ||= {}).view = (() => {
-  const { playerDays, lockInDefault, spotRefs, swapTargets, lockedGameId } = globalThis.SNP.model;
-  const { esc, f2, headshot, teamName, avatar, record, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, reserveRule } =
-    globalThis.SNP.ui;
+  const { playerDays, lockInDefault, lockState, spotRefs, swapTargets, lockedGameId } = globalThis.SNP.model;
+  const { esc, f2, headshot, teamName, avatar, record, injuryTag, positions, gameTime, weekday, slotBadge, weekNav, notice, lineup, taxiRule, reserveRule,
+    whatIfOn, whatIfBanner } = globalThis.SNP.ui;
   const PREVIEW_CHARS = 20000;
   const PAGES = { team: 'Team', matchup: 'Matchup' };
 
@@ -12,7 +12,8 @@
       : teamView(state);
     // The notice floats over the panel so showing or clearing it never shifts the cards being clicked.
     // While a dialog is open it shows over the dialog instead.
-    return `<div class="app">${toolbar(state, log)}<div class="body">${body}</div>${state.tab === 'api' || state.modal ? '' : notice(state)}</div>`;
+    const whatIf = state.tab !== 'api' && whatIfOn(state);
+    return `<div class="app${whatIf ? ' whatif' : ''}">${toolbar(state, log)}${whatIf ? whatIfBanner(state) : ''}<div class="body">${body}</div>${state.tab === 'api' || state.modal ? '' : notice(state)}</div>`;
   }
 
   function toolbar(s, log) {
@@ -23,9 +24,9 @@
       .join('');
     // Only on the owner's editable Team tab, once the week's games are in.
     const l = s.ready && s.page === 'team' && s.tab === 'page' && !s.error ? lineup(s) : null;
-    const optimize = l?.editable && l.week
-      ? `<button class="optimize" data-action="optimize" title="Propose the best starting lineup for this week" ${s.saving ? 'disabled' : ''}>Optimize lineup</button>`
-      : '';
+    const optimize = !(l?.editable && l.week) ? ''
+      : whatIfOn(s) ? '<button class="optimize" disabled title="Optimize uses your league\'s scoring. Switch what-if scoring off to use it.">Optimize lineup</button>'
+      : `<button class="optimize" data-action="optimize" title="Propose the best starting lineup for this week" ${s.saving ? 'disabled' : ''}>Optimize lineup</button>`;
     return `<nav class="toolbar">
       <div class="tabs" role="tablist">${tab('page', PAGES[s.page] || 'Team')}${tab('api', `API calls <span class="count">${log.length}</span>`)}</div>
       <div class="tools">
@@ -48,7 +49,8 @@
       movable,
       s,
       week,
-      points: matchup?.players_points || {},
+      // Sleeper's own per-player points use the league's scoring; what-if rebuilds them from Lock-In rules.
+      points: whatIfOn(s) ? null : matchup?.players_points || {},
       locks: l.locks,
       editable: editable && !s.saving,
       selecting: Boolean(editable && s.swap),
@@ -114,9 +116,13 @@
     const { roster, week, matchup, leg, starters } = l;
     const owner = s.usersById?.[roster.owner_id];
     const image = avatar(s, roster);
-    const proj = leg?.proj_points ??
-      (week && starters.reduce((sum, id) => sum + (lockInDefault(playerDays(week, s.players[id]?.team, id)) ?? 0), 0));
-    const points = leg?.custom_points ?? leg?.points ?? matchup?.custom_points ?? matchup?.points;
+    // Sleeper's totals use the league's scoring, so under what-if scoring they're added up here from Lock-In rules.
+    const states = whatIfOn(s) && week ? starters.filter((id) => id && id !== '0')
+      .map((id) => lockState(playerDays(week, s.players[id]?.team, id), l.locks[id], s.now)) : null;
+    const proj = states ? states.reduce((sum, st) => sum + (st.counted ? st.points : lockInDefault(st.games) ?? 0), 0)
+      : leg?.proj_points ?? (week && starters.reduce((sum, id) => sum + (lockInDefault(playerDays(week, s.players[id]?.team, id)) ?? 0), 0));
+    const points = states ? states.reduce((sum, st) => sum + (st.points ?? 0), 0)
+      : leg?.custom_points ?? leg?.points ?? matchup?.custom_points ?? matchup?.points;
     const opp = matchup?.matchup_id != null &&
       week.matchups.find((m) => m.matchup_id === matchup.matchup_id && m.roster_id !== roster.roster_id);
     const oppRoster = opp && s.rosters.find((r) => r.roster_id === opp.roster_id);
@@ -166,7 +172,7 @@
       </div>
       <div class="days">${days.map((d) => dayCell(d, s.today)).join('')}</div>
       <div class="week-pts">
-        <b>${f2(points[id])}</b>
+        <b>${f2(points ? points[id] : lockState(days, locks[id], s.now).points)}</b>
         <span>${lockedDay ? `lock ${f2(lockedDay.actual ?? lockedDay.proj)}` : `proj ${f2(lockInDefault(days))}`}</span>
       </div>
     </article>`;

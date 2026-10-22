@@ -132,8 +132,8 @@
       locks: leg?.starters_games || {},
       mine,
       editable,
-      // Locks only exist on an in-season matchup leg.
-      lockable: mine && current && inSeason && Boolean(leg),
+      // Locks only exist on an in-season matchup leg. A lock is real points, so not under what-if scoring.
+      lockable: mine && current && inSeason && Boolean(leg) && !whatIfOn(s),
       // Taxi belongs to the roster, not a week, so it's edited from the current week.
       taxiEditable: editable && (settings.taxi_slots || 0) > 0 && s.week === s.currentWeek,
       taxiOpen: globalThis.SNP.model.taxiOpen(settings, s.seasonType, s.currentWeek, weekStarted(s)),
@@ -175,8 +175,35 @@
     return `${names} players can move to IR.`;
   }
 
+  // What-if scoring (see whatif.js) applies once a value differs from the league's and it's switched on.
+  const whatIfOn = (s) => Boolean(s.whatIf?.on && Object.keys(s.whatIf.overrides || {}).length);
+
+  // The scoring settings every fantasy number on screen uses.
+  function scoringOf(s) {
+    const league = s.league?.scoring_settings || {};
+    return whatIfOn(s) ? globalThis.SNP.scoring.withOverrides(league, s.whatIf.overrides) : league;
+  }
+
+  // The what-if changes in a few words, e.g. "Points Scored 0.5 → 1, Blocks 2 → 3".
+  function whatIfChanges(s, max = 3) {
+    const league = s.league?.scoring_settings || {};
+    const labels = Object.fromEntries(globalThis.SNP.scoring.settingsList(league));
+    const list = Object.entries(s.whatIf?.overrides || {}).map(([key, value]) => `${labels[key] || key} ${league[key] ?? 0} → ${value}`);
+    return list.length > max ? `${list.slice(0, max).join(', ')} and ${list.length - max} more` : list.join(', ');
+  }
+
+  // Shown over the Team and Matchup tabs and the player card while what-if scoring is on.
+  function whatIfBanner(s) {
+    if (!whatIfOn(s)) return '';
+    return `<div class="whatif-banner" role="status">
+      <span class="tag">What-if scoring</span>
+      <span class="what">${esc(whatIfChanges(s))}. Fantasy points here aren't your league's; Lock-In and Optimize are off.</span>
+      <button data-action="whatif-off">Use league scoring</button>
+    </div>`;
+  }
+
   return {
-    reserveRule,
+    reserveRule, whatIfOn, scoringOf, whatIfChanges, whatIfBanner,
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
     gameTime, weekday, nextGame, dialog, dialogErrors, slotBadge, weekNav, notice, lineup, taxiRule, owns,
   };

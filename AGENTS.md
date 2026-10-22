@@ -15,9 +15,9 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 
 ## Layout
 
-- `manifest.json`: content scripts run at `document_start` on `sleeper.com`, in this order: `scoring`, `model`, `api`, `ui`, `view`, `matchup`, `waivers`, `optimize`, `nfl`, `card`, `content`. `page-hook.js` runs separately in the page's MAIN world.
+- `manifest.json`: content scripts run at `document_start` on `sleeper.com`, in this order: `scoring`, `model`, `api`, `ui`, `view`, `matchup`, `waivers`, `optimize`, `nfl`, `card`, `whatif`, `content`. `page-hook.js` runs separately in the page's MAIN world.
 - `src/model.js`: pure rules (schedule, Lock-In, lineup/taxi/IR moves, best lineup for NBA and NFL via one Hungarian-algorithm solver, waivers, win probability). Unit tested.
-- `src/ui.js`, `src/view.js`, `src/matchup.js`, `src/waivers.js`, `src/optimize.js` (NBA Optimize lineup dialog), `src/nfl.js` (NFL Optimize lineup dialog and button), `src/card.js` (player card): pure state -> HTML render functions.
+- `src/ui.js`, `src/view.js`, `src/matchup.js`, `src/waivers.js`, `src/optimize.js` (NBA Optimize lineup dialog), `src/nfl.js` (NFL Optimize lineup dialog and button), `src/card.js` (player card), `src/whatif.js` (the corner What-if scoring control): pure state -> HTML render functions.
 - `src/content.js`: one session per league (survives tab switches), data loading, saves, events. NFL leagues get `mountNfl` instead: the OPTIMIZE button and its dialog, nothing else. Renders into a shadow root that replaces Sleeper's "not yet available" placeholder; dialogs render in a separate page-level host.
 - `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and Players/Trend player rows, and hands clicks to the extension via `snp:player-action` / `snp:player-card` DOM events, only for leagues the extension marked NBA (`html[data-snp-nba-league]`). For NFL it reads the Team tab's lineup from Sleeper's Team component (`snp:nfl-lineup-request`) and saves through that component's own `updateMatchupLeg` (`snp:nfl-lineup-save`).
 - `src/panel.css`: all styles, inlined into each shadow root.
@@ -26,6 +26,7 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 ## Conventions and gotchas
 
 - Read league rules from the API (`league.settings`, `scoring_settings`); never hardcode them.
+- Score fantasy points with `ui.scoringOf(state)`, never `league.scoring_settings` directly, so what-if scoring reaches them. Sleeper's own totals use league scoring; set them aside when `ui.whatIfOn(state)`.
 - Port behavior from Sleeper's own web bundle when it exists (mutation shapes, eligibility, dialog wording) instead of inventing it.
 - Logged-in calls send `localStorage.token` as `Authorization`; never log or render it.
 - Public `/v1/league/<id>/rosters` is CDN-cached for minutes; when logged in read rosters via GraphQL `league_rosters`.

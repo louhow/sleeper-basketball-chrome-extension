@@ -2,7 +2,7 @@
 // (bio, rankings), then game logs, career and transaction history on the left
 // and latest news and the depth chart on the right. Pure: state -> HTML.
 (globalThis.SNP ||= {}).card = (() => {
-  const { esc, f2, teamLogo, shortName } = globalThis.SNP.ui;
+  const { esc, f2, teamLogo, shortName, scoringOf, whatIfOn, whatIfBanner } = globalThis.SNP.ui;
   const { scoreStats } = globalThis.SNP.scoring;
   const { scoreTier } = globalThis.SNP.model;
   const CDN = 'https://sleepercdn.com';
@@ -125,7 +125,7 @@
 
     return `<div class="modal pc-modal">
       <div class="backdrop" data-action="close-modal"></div>
-      <div class="pc" role="dialog" aria-modal="true" aria-label="${esc(p.name)}" style="--team:${color}">
+      <div class="pc${whatIfOn(s) ? ' whatif' : ''}" role="dialog" aria-modal="true" aria-label="${esc(p.name)}" style="--team:${color}">
         <div class="pc-top">
           <div class="pc-tab">
             <div><b>${esc(shortName(p))}</b><span>${esc((p.positions || []).join(', '))} - ${esc(team || 'FA')}</span></div>
@@ -133,6 +133,7 @@
           </div>
         </div>
         <div class="pc-panel">
+          ${whatIfBanner(s)}
           <header class="pc-hero">
             <div class="pc-photo">
               ${team ? `<img class="pc-logo" src="${teamLogo(team)}" alt="">` : ''}
@@ -191,7 +192,7 @@
     // Switching seasons keeps the previous season on screen, dimmed, until the new one arrives.
     const stale = !c.logs?.[season] && m.prevSeason != null && c.logs?.[m.prevSeason];
     const log = c.logs?.[season] || stale;
-    const rows = log ? gameLog(log, s.league?.scoring_settings || {}) : null;
+    const rows = log ? gameLog(log, scoringOf(s)) : null;
     const played = (rows || []).filter((r) => r.played);
     const cols = [
       ['min', false], ['pts', false], ['reb', false], ['ast', false], ['stl', false], ['blk', false], ['to', true],
@@ -230,7 +231,7 @@
   }
 
   function careerSection(s, c) {
-    const scoring = s.league?.scoring_settings || {};
+    const scoring = scoringOf(s);
     const rows = c.career ? c.career.filter((r) => r.stats?.gp).map((r) => ({ ...careerRow(r.season, r.stats, scoring), team: r.team })) : null;
     const keys = [['fpts'], ['rank', true], ['gp'], ['min'], ['pts'], ['reb'], ['ast'], ['stl'], ['blk'], ['to', true], ['fgp'], ['tpm'], ['ftp']];
     const scale = Object.fromEntries(keys.map(([k, inv]) => [k, scaler(rows || [], k, inv)]));

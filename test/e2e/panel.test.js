@@ -1101,6 +1101,85 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   documentBody = LOGGED_OUT;
 });
 
+const corner = (sel = '') => `#sleeper-nba-scoring ${sel}`;
+
+test('what-if scoring: try other values from the corner on the Team, Matchup and player card, then switch back', async () => {
+  documentBody = LOGGED_IN;
+  sleeper.rosters = null;
+  await startMidWeek();
+  await openMyTeam(TEAM_URL);
+  const league = await (await fetch(`https://api.sleeper.app/v1/league/${LEAGUE}`)).json();
+  const pts = league.scoring_settings.pts;
+  const cells = () => page.locator(panel('.card .cell .v')).allTextContents();
+  const before = await cells();
+  assert.match(await page.locator(panel('.team-card .score .sub')).textContent(), /proj 157\.23/, "Sleeper's own projection");
+
+  // Collapsed: League is on, and What-if waits for a change.
+  await page.locator(corner('.wi-dock')).waitFor();
+  assert.equal(await page.locator(corner('[data-wi="league"]')).getAttribute('aria-checked'), 'true');
+  assert.equal(await page.locator(corner('[data-wi="whatif"]')).isDisabled(), true);
+
+  // Typing applies as you go and keeps the field focused.
+  await page.locator(corner('[data-wi="toggle-open"]')).click();
+  const input = page.locator(corner('input[data-wi-key="pts"]'));
+  assert.equal(await input.inputValue(), String(pts));
+  await input.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type(String(pts * 3), { delay: 30 });
+  assert.equal(await input.evaluate((el) => el.getRootNode().activeElement === el), true, 'still typing in the same field');
+  assert.equal(await input.inputValue(), String(pts * 3));
+  await page.locator(corner('.wi-row.changed .wi-was')).filter({ hasText: `League ${pts}` }).waitFor();
+  await page.locator(panel('.app.whatif')).waitFor();
+  assert.match(await page.locator(panel('.whatif-banner')).textContent(), new RegExp(`Points Scored ${pts} → ${pts * 3}`));
+  assert.notDeepEqual(await cells(), before, 'projections rescored');
+  assert.doesNotMatch(await page.locator(panel('.team-card .score .sub')).textContent(), /157\.23/, "Sleeper's league-scored total is set aside");
+  assert.equal(await page.locator(panel('button.optimize')).isDisabled(), true, 'Optimize uses league scoring');
+  await page.screenshot({ path: `${OUT}whatif-editor.png` });
+
+  // Like a tooltip, a click elsewhere closes the editor; the switch stays on What-if.
+  await page.locator(panel('.team-card')).click({ position: { x: 5, y: 5 } });
+  await page.locator(corner('.wi-pop')).waitFor({ state: 'detached' });
+  assert.equal(await page.locator(corner('[data-wi="whatif"]')).getAttribute('aria-checked'), 'true');
+  assert.equal(await page.locator(corner('[data-wi="whatif"] .count')).textContent(), '1');
+  await page.screenshot({ path: `${OUT}whatif-on.png` });
+
+  // The player card is rescored too, with the switch still reachable over it.
+  await page.locator(panel('.card button.name')).first().click();
+  await page.locator(dialog('.pc.whatif .whatif-banner')).waitFor({ timeout: 30000 });
+  await page.locator(dialog('.pc-table.log tbody tr:not(.skeleton)')).first().waitFor({ timeout: 30000 });
+  const box = await page.locator(corner('.wi-dock')).boundingBox();
+  assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [box.x + box.width / 2, box.y + box.height / 2]), 'sleeper-nba-scoring');
+  await page.screenshot({ path: `${OUT}whatif-card.png` });
+  await page.keyboard.press('Escape');
+  await page.locator(dialog('.pc')).waitFor({ state: 'detached' });
+
+  // Remembered across reloads; the Matchup tab sets aside Sleeper's totals and Lock-In.
+  await page.goto(MATCHUP_URL);
+  await page.locator(panel('.app.whatif .mu-head')).waitFor({ timeout: 30000 });
+  assert.doesNotMatch(await page.locator(panel('.mu-head')).textContent(), /157\.23/);
+  assert.equal(await page.locator(panel('[data-lock]')).count(), 0, 'no locking real points from what-if numbers');
+  await page.screenshot({ path: `${OUT}whatif-matchup.png` });
+
+  // Back to the league's scoring from the switch, and back again.
+  await page.locator(corner('[data-wi="league"]')).click();
+  await page.locator(panel('.app.whatif')).waitFor({ state: 'detached' });
+  assert.match(await page.locator(panel('.mu-head')).textContent(), /157\.23/);
+  await page.locator(corner('[data-wi="whatif"]')).click();
+  await page.locator(panel('.app.whatif')).waitFor();
+
+  // Reset puts every value back and turns what-if off.
+  await page.locator(corner('[data-wi="toggle-open"]')).click();
+  await page.locator(corner('[data-wi="reset"]')).click();
+  await page.locator(panel('.app.whatif')).waitFor({ state: 'detached' });
+  assert.equal(await page.locator(corner('input[data-wi-key="pts"]')).inputValue(), String(pts));
+  assert.equal(await page.locator(corner('.wi-row.changed')).count(), 0);
+  await page.keyboard.press('Escape');
+  await page.locator(corner('.wi-pop')).waitFor({ state: 'detached' });
+  assert.equal(await page.locator(corner('[data-wi="whatif"]')).isDisabled(), true);
+  sleeper.midWeek = false;
+  documentBody = LOGGED_OUT;
+});
+
 const nflDialog = (sel = '') => `#sleeper-nfl-dialog ${sel}`;
 test('NFL optimize lineup: an OPTIMIZE button beside WAIVER and TRADE proposes and saves through Sleeper', async () => {
   documentBody = nflTeamTab();

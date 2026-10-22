@@ -4,7 +4,7 @@
 // On every page of an NBA league it also answers Sleeper's waiver and add
 // buttons (see page-hook.js) with a bid dialog.
 (() => {
-  const { createApi, view, model, scoring, ui, waivers, optimize, card, nfl } = globalThis.SNP;
+  const { createApi, view, model, scoring, ui, waivers, optimize, card, nfl, whatif } = globalThis.SNP;
   const ROUTE = /^\/leagues\/(\d+)(?:\/([^/]+))?/;
   const PANEL_PAGES = new Set(['team', 'matchup']);
   const PLAYERS_PATH = '/v1/players/nba';
@@ -50,10 +50,17 @@
     const layerShadow = layer.attachShadow({ mode: 'open' });
     layerShadow.innerHTML = '<style></style><div class="root"></div>';
     const layerRoot = layerShadow.querySelector('.root');
+    // What-if scoring sits in the page's top-right corner, over dialogs too.
+    const corner = document.createElement('div');
+    corner.id = 'sleeper-nba-scoring';
+    const cornerShadow = corner.attachShadow({ mode: 'open' });
+    cornerShadow.innerHTML = '<style></style><div class="root"></div>';
+    const cornerRoot = cornerShadow.querySelector('.root');
     let styled = false;
     stylesheet.then((css) => {
       shadow.querySelector('style').textContent = css;
       layerShadow.querySelector('style').textContent = css;
+      cornerShadow.querySelector('style').textContent = css;
       styled = true;
       schedule();
     });
@@ -91,6 +98,9 @@
       // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving } | { kind: 'player', playerId, season }
       // | { kind: 'optimize', plan, ack, errors, saving }; a player card can open over it (`back`).
       modal: null,
+      // What-if scoring: values that differ from the league's, whether they're in use, and the editor's state.
+      // `drafts` holds text being typed that isn't a number yet.
+      whatIf: { overrides: {}, on: false, open: false, showAll: false, drafts: {} },
     };
     let destroyed = false;
     let lastPage = page; // the league tab shown, panel or not
@@ -141,6 +151,7 @@
         if (destroyed || !styled) return;
         state.now = Date.now();
         renderLayer();
+        renderCorner();
         // Blank until everything for the first paint is in, like Sleeper's own tabs.
         if (!(state.ready || state.error)) return;
         const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
@@ -162,7 +173,7 @@
       const dialog = kind === 'player' ? card.render(state) : kind === 'optimize' ? optimize.render(state) : waivers.render(state);
       // A player card opened from the optimize dialog sits on top of it.
       const under = state.modal?.back?.kind === 'optimize' ? optimize.render(state, state.modal.back) : '';
-      layerRoot.innerHTML = `<div class="page-layer">${under}${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
+      layerRoot.innerHTML = `<div class="page-layer${ui.whatIfOn(state) ? ' whatif' : ''}">${under}${dialog}${showNotice ? ui.notice(state) : ''}</div>`;
       for (const [key, top] of scrolls) {
         const el = key === 'dialog' ? layerRoot.querySelector('.dialog-body') : layerRoot.querySelector(`[data-scroll="${key}"]`);
         if (el) el.scrollTop = top;
@@ -171,6 +182,63 @@
       if (input && (focused || state.modal.focus)) {
         input.focus();
         state.modal.focus = false;
+      }
+    }
+
+    // The what-if scoring control, wherever the extension shows fantasy points:
+    // the Team and Matchup tabs and its dialogs. It's patched in place, so a
+    // field being typed in keeps its focus, caret and text.
+    function renderCorner() {
+      if (!(state.ready && !state.error && (state.onPanel || state.modal))) {
+        state.whatIf.open = false;
+        return corner.remove();
+      }
+      if (!corner.isConnected) document.documentElement.appendChild(corner);
+      const next = document.createElement('div');
+      next.innerHTML = whatif.render(state);
+      morph(cornerRoot, next, cornerShadow.activeElement);
+    }
+
+    // Makes `from` match `to`, keeping nodes that are already right. Children
+    // pair up by position; an input keeps whatever is being typed into it.
+    function morph(from, to, active) {
+      const a = [...from.childNodes];
+      const b = [...to.childNodes];
+      b.forEach((node, i) => {
+        const old = a[i];
+        if (!old) return from.append(node);
+        if (old.nodeName !== node.nodeName) return old.replaceWith(node);
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (old.data !== node.data) old.data = node.data;
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        for (const { name } of [...old.attributes]) if (!node.hasAttribute(name)) old.removeAttribute(name);
+        for (const { name, value } of [...node.attributes]) if (old.getAttribute(name) !== value) old.setAttribute(name, value);
+        if (old.tagName === 'INPUT') {
+          if (old !== active && old.value !== node.value) old.value = node.value;
+          return;
+        }
+        morph(old, node, active);
+      });
+      a.slice(b.length).forEach((node) => node.remove());
+    }
+
+    // Changes what-if scoring, rescores every loaded week and remembers it for this league.
+    function setWhatIf(changes) {
+      const w = Object.assign(state.whatIf, changes);
+      w.overrides = scoring.changedOnly(state.league?.scoring_settings || {}, w.overrides);
+      chrome.storage.local.set({ [`whatif:${leagueId}`]: { overrides: w.overrides, on: w.on } });
+      rescore();
+      schedule();
+    }
+
+    // Every loaded week's fantasy points, with whichever scoring is in use.
+    function rescore() {
+      const settings = ui.scoringOf(state);
+      for (const week of Object.values(state.weeks)) {
+        week.proj = model.pointsByGame(week.projRows, settings, scoring.scoreStats);
+        week.actual = model.pointsByGame(week.statRows, settings, scoring.scoreStats);
       }
     }
 
@@ -221,6 +289,7 @@
       // Tells page-hook.js to route this league's waiver and add buttons here.
       document.documentElement.dataset.snpNbaLeague = leagueId;
       const rosterKey = `roster:${leagueId}`;
+      const whatIfKey = `whatif:${leagueId}`;
       const [nbaState, users, rosters, bracket, traded, drafts, players, prefs, me] = await Promise.all([
         api.get('/v1/state/nba'),
         api.get(`/v1/league/${leagueId}/users`),
@@ -229,10 +298,17 @@
         api.get(`/v1/league/${leagueId}/traded_picks`),
         api.get(`/v1/league/${leagueId}/drafts`),
         loadPlayers(force),
-        chrome.storage.local.get(rosterKey),
+        chrome.storage.local.get([rosterKey, whatIfKey]),
         loadMe(),
       ]);
       const savedRoster = rosters.find((r) => r.roster_id === prefs[rosterKey]);
+      // Saved what-if values that now match the league's (it changed its scoring) drop out.
+      const savedWhatIf = prefs[whatIfKey] || {};
+      Object.assign(state.whatIf, {
+        overrides: scoring.changedOnly(league.scoring_settings || {}, savedWhatIf.overrides || {}),
+        on: Boolean(savedWhatIf.on),
+        drafts: {},
+      });
       const myRoster = me && rosters.find((r) => r.owner_id === me || (r.co_owners || []).includes(me));
       Object.assign(state, {
         league,
@@ -345,12 +421,15 @@
           .catch(() => []),
       ]);
       const games = scores?.scores || [];
-      const scoringSettings = league.scoring_settings || {};
+      const scoringSettings = ui.scoringOf(state);
       state.weeks[week] = {
         matchups: matchups || [],
         days: model.weekDays(games),
         gamesByTeam: model.gamesByTeam(games),
         games: games.map((g) => ({ start: g.start_time, status: g.status })),
+        // Raw rows stay so what-if scoring can rescore them.
+        projRows: projections || [],
+        statRows: stats || [],
         proj: model.pointsByGame(projections || [], scoringSettings, scoring.scoreStats),
         actual: model.pointsByGame(stats || [], scoringSettings, scoring.scoreStats),
         research: research || {},
@@ -700,7 +779,7 @@
     // Proposes the best lineup for the shown week; nothing saves until it's applied.
     function openOptimize() {
       const lineup = ui.lineup(state);
-      if (state.saving || !lineup?.editable || !lineup.week) return;
+      if (state.saving || !lineup?.editable || !lineup.week || ui.whatIfOn(state)) return;
       state.swap = null;
       state.lockConfirm = null;
       state.notice = null;
@@ -715,6 +794,11 @@
       const m = state.modal;
       const lineup = ui.lineup(state);
       if (m?.kind !== 'optimize' || m.saving || !lineup?.editable) return;
+      // The plan was made with the league's scoring; what-if numbers would change it.
+      if (ui.whatIfOn(state)) {
+        m.errors = ['Switch what-if scoring off to apply. Optimize picks the lineup with your league\'s scoring.'];
+        return schedule();
+      }
       const plan = model.bestLineup(lineup, Date.now());
       if (JSON.stringify(plan.starters) !== JSON.stringify(m.plan.starters) ||
         JSON.stringify(plan.changes) !== JSON.stringify(m.plan.changes)) {
@@ -781,6 +865,7 @@
       if (action === 'refresh') loadLeague(true).catch(fail);
       if (action === 'claims') openClaims();
       if (action === 'optimize') openOptimize();
+      if (action === 'whatif-off') setWhatIf({ on: false });
     });
     root.addEventListener('change', (e) => {
       if (e.target.dataset.action !== 'roster') return;
@@ -850,6 +935,7 @@
       if (action === 'close-modal') closeModal();
       if (action === 'submit-claim') submitClaim();
       if (action === 'apply-lineup') applyOptimize();
+      if (action === 'whatif-off') setWhatIf({ on: false });
     });
     layerRoot.addEventListener('change', (e) => {
       if (!e.target.matches('[data-op-ack]') || state.modal?.kind !== 'optimize') return;
@@ -866,6 +952,54 @@
     layerRoot.addEventListener('error', (e) => {
       if (e.target.tagName === 'IMG') e.target.classList.add('missing');
     }, true);
+
+    cornerRoot.addEventListener('click', (e) => {
+      const w = state.whatIf;
+      const reset = e.target.closest('[data-wi-reset]');
+      if (reset) {
+        const { [reset.dataset.wiReset]: _, ...overrides } = w.overrides;
+        delete w.drafts[reset.dataset.wiReset];
+        return setWhatIf({ overrides });
+      }
+      const action = e.target.closest('[data-wi]')?.dataset.wi;
+      if (action === 'toggle-open') w.open = !w.open;
+      if (action === 'close') w.open = false;
+      if (action === 'show-all') w.showAll = !w.showAll;
+      if (action === 'league') return setWhatIf({ on: false });
+      if (action === 'whatif') return setWhatIf({ on: true });
+      if (action === 'reset') return setWhatIf({ overrides: {}, drafts: {}, on: false });
+      schedule();
+    });
+    // Values apply as they're typed, and switch the page to what-if scoring.
+    cornerRoot.addEventListener('input', (e) => {
+      const key = e.target.dataset.wiKey;
+      if (!key) return;
+      const w = state.whatIf;
+      w.drafts[key] = e.target.value;
+      // A stat the league doesn't score stays listed while it's edited, even once it's back to 0.
+      if (!state.league.scoring_settings?.[key]) w.showAll = true;
+      const value = whatif.parse(e.target.value);
+      if (value == null) return schedule();
+      setWhatIf({ overrides: { ...w.overrides, [key]: value }, on: true });
+    });
+    // Leaving a field (or Enter) settles it: the value as a number, or back to what it was.
+    function settle(input) {
+      const key = input.dataset.wiKey;
+      if (!key || !(key in state.whatIf.drafts)) return;
+      delete state.whatIf.drafts[key];
+      schedule();
+    }
+    cornerRoot.addEventListener('change', (e) => settle(e.target));
+    cornerRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.dataset.wiKey) settle(e.target);
+    });
+    // Like a tooltip, the editor closes on a click anywhere else.
+    function onOutsideClick(e) {
+      if (!state.whatIf.open || e.composedPath().includes(corner)) return;
+      state.whatIf.open = false;
+      schedule();
+    }
+    document.addEventListener('click', onOutsideClick, true);
     function onPlayerAction(e) {
       try {
         openClaim(JSON.parse(e.detail));
@@ -884,6 +1018,10 @@
     document.addEventListener('snp:player-card', onPlayerCard);
 
     function onKey(e) {
+      if (e.key === 'Escape' && state.whatIf.open) {
+        state.whatIf.open = false;
+        return schedule();
+      }
       if (e.key === 'Escape' && state.modal) return closeModal();
       if (e.key === 'Escape' && (state.swap || state.lockConfirm)) {
         state.swap = null;
@@ -912,12 +1050,14 @@
     function teardown() {
       clearInterval(clock);
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('snp:player-action', onPlayerAction);
       document.removeEventListener('snp:player-card', onPlayerCard);
       if (document.documentElement.dataset.snpNbaLeague === leagueId) delete document.documentElement.dataset.snpNbaLeague;
       cancelAnimationFrame(frame);
       host.remove();
       layer.remove();
+      corner.remove();
       restorePlaceholder();
     }
 

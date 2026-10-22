@@ -62,6 +62,23 @@ Clicking a player's name or headshot on the Team or Matchup tab, or a player on 
 - Career: one row per season with fantasy points, position rank, per-game averages and shooting.
 - Transaction history in this league (logged in), latest news, and the team's depth chart.
 
+### What-if scoring
+
+A **Scoring** control sits in the page's top-right corner on the Team and Matchup tabs and over the extension's dialogs, to try other scoring settings without touching the league.
+
+- Open it to edit any value: the league's scored stats first, in Sleeper's order and wording, then the rest behind "Show more". Changed rows show the league's value, and clicking it puts that one back.
+- Values apply as they're typed, and the page switches to what-if scoring.
+- Collapsed, it's a switch between League and What-if (with the number of changes). What-if stays off until a value changes.
+- Reset to league puts every value back and turns what-if off.
+- The values and the switch are remembered per league in the browser (`chrome.storage.local`); nothing is sent to Sleeper.
+
+While what-if is on, it's hard to miss:
+
+- The switch is purple, and the Team tab, Matchup tab and player card show a purple banner listing the changes, with a button back to league scoring.
+- Every fantasy number it changes (day cells, weekly points, team totals, Matchup rows, the card's projections) turns purple, and dialogs get a purple frame.
+- Sleeper's own totals (`points`, `proj_points`, `players_points`) are scored with the league's settings, so they're set aside and added up from Lock-In rules instead.
+- Lock-In and Optimize lineup are off, since they act on real points: a lock is final, and Optimize picks with the league's scoring.
+
 ### NFL: Optimize lineup
 
 Sleeper's web app already runs NFL leagues, so the extension adds only one thing there: an **OPTIMIZE** button on your own Team tab, left of Sleeper's WAIVER and TRADE buttons (it reuses their classes, so it looks like them).
