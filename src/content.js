@@ -126,6 +126,9 @@
       notice: null, // { kind: 'error' | 'ok', text }
       lockConfirm: null, // player id whose Lock-In is awaiting confirmation
       ready: false, // first league + week load finished; the panel stays blank until then
+      // Sleeper turned down the page's login (see api.sessionExpired): show nothing but how to fix it,
+      // since the logged-out fallbacks (public rosters, no Lock-In picks) would show wrong numbers.
+      sessionExpired: false,
       claims: null, // the logged-in owner's pending waiver claims
       cards: {}, // player card data by player id, kept for the session
       // { kind: 'bid', playerId, status, bid, drops, errors, saving } | { kind: 'claims', errors, saving } | { kind: 'player', playerId, season }
@@ -184,10 +187,11 @@
         frame = 0;
         if (destroyed || !styled) return;
         state.now = Date.now();
+        state.sessionExpired = api.sessionExpired();
         renderLayer();
         renderCorner();
         // Blank until everything for the first paint is in, like Sleeper's own tabs.
-        if (!(state.ready || state.error)) return;
+        if (!(state.ready || state.error || state.sessionExpired)) return;
         const scrollTop = root.querySelector('.body')?.scrollTop ?? 0;
         root.innerHTML = view.render(state, api.log);
         const body = root.querySelector('.body');

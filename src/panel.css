@@ -135,6 +135,26 @@ button.icon {
   color: var(--muted);
   text-align: center;
 }
+.session-expired {
+  max-width: 420px;
+  margin: 32px auto;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 91, 110, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 91, 110, 0.08);
+  text-align: center;
+}
+.session-expired h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.session-expired p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
 .msg.error,
 pre.error {
   color: var(--danger);

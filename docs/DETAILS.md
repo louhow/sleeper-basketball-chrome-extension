@@ -142,6 +142,10 @@ It enables:
 - `league_transactions_filtered(league_id, roster_id_filters, type_filters: ["waiver"], status_filters: ["pending"])`: pending claims.
 - `update_waiver_claim(league_id, transaction_id, leg, k_settings, v_settings)` and `cancel_waiver_claim(league_id, leg, transaction_id)`: changing a bid and canceling a claim.
 
+If Sleeper turns the session down (a 401 or 403 on any logged-in call; a stale token can do this while Sleeper's own pages still work), the Team and Matchup tabs show only "Log back in to Sleeper" with how to fix it.
+The logged-out fallbacks (public rosters, no Lock-In picks) would otherwise show wrong numbers.
+The API log stays available, and once the page holds a new token (after logging back in) a reload or refresh loads normally.
+
 ## API calls
 
 | Call | Used for |

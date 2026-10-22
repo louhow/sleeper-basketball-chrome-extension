@@ -8,6 +8,7 @@
 
   function render(state, log) {
     const body = state.tab === 'api' ? apiView(state, log)
+      : state.sessionExpired ? sessionExpired()
       : state.page === 'matchup' ? globalThis.SNP.matchup.render(state)
       : teamView(state);
     // The notice floats over the panel so showing or clearing it never shifts the cards being clicked.
@@ -23,7 +24,7 @@
       .map((r) => `<option value="${r.roster_id}" ${r.roster_id === s.rosterId ? 'selected' : ''}>${esc(teamName(s, r))}</option>`)
       .join('');
     // Only on the owner's editable Team tab, once the week's games are in.
-    const l = s.ready && s.page === 'team' && s.tab === 'page' && !s.error ? lineup(s) : null;
+    const l = s.ready && s.page === 'team' && s.tab === 'page' && !s.error && !s.sessionExpired ? lineup(s) : null;
     const optimize = !(l?.editable && l.week) ? ''
       : whatIfOn(s) ? '<button class="optimize" disabled title="Optimize uses your league\'s scoring. Switch what-if scoring off to use it.">Optimize lineup</button>'
       : `<button class="optimize" data-action="optimize" title="Propose the best starting lineup for this week" ${s.saving ? 'disabled' : ''}>Optimize lineup</button>`;
@@ -31,10 +32,19 @@
       <div class="tabs" role="tablist">${tab('page', PAGES[s.page] || 'Team')}${tab('api', `API calls <span class="count">${log.length}</span>`)}</div>
       <div class="tools">
         ${optimize}
-        ${options ? `<select data-action="roster" aria-label="Team to show">${options}</select>` : ''}
+        ${options && !s.sessionExpired ? `<select data-action="roster" aria-label="Team to show">${options}</select>` : ''}
         <button class="icon" data-action="refresh" title="Refetch everything" aria-label="Refresh">↻</button>
       </div>
     </nav>`;
+  }
+
+  // In place of the tab while Sleeper rejects the page's login.
+  function sessionExpired() {
+    return `<div class="session-expired" role="alert">
+      <h3>Log back in to Sleeper</h3>
+      <p>Sleeper turned down this browser's login, so your lineups, <span class="nowrap">Lock-In</span> picks and scores can't load correctly.</p>
+      <p>Log out of Sleeper, log back in, then reload this page.</p>
+    </div>`;
   }
 
   function teamView(s) {

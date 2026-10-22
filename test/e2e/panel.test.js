@@ -273,6 +273,8 @@ const sleeper = {
   beforeTipoff: false,
   // When set, rewrites the weekly projection rows (and so mid-week stats, which stand in from them).
   projections: null,
+  // When set, Sleeper turns down the session: every logged-in call gets a 401.
+  rejectSession: false,
 };
 
 // Picks each team's first game of week 1 up front, since the page loads scores
@@ -329,7 +331,8 @@ async function answerGraphql(route) {
     (sleeper.midWeek ? fakeMidWeek : fakeBeforeTipoff)(body.data.scores);
     return route.fulfill({ response: res, json: body });
   }
-  assert.equal(auth, FAKE_TOKEN, 'sends the page session token');
+  assert.ok(auth.startsWith(FAKE_TOKEN), 'sends the page session token');
+  if (sleeper.rejectSession) return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"unauthorized"}' });
   const { query, variables } = req.postDataJSON();
   const json = (body) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   if (/query me\b/.test(query)) return json({ data: { me: { user_id: sleeper.me } } });
@@ -1164,6 +1167,28 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   await page.keyboard.press('Escape');
   sleeper.projections = null;
   sleeper.midWeek = false;
+  documentBody = LOGGED_OUT;
+});
+
+test('logged in with a session Sleeper turns down: asks to log back in instead of showing wrong numbers', async () => {
+  documentBody = LOGGED_IN;
+  sleeper.rejectSession = true;
+  await page.goto(MATCHUP_URL);
+  await page.locator(panel('.session-expired')).waitFor({ timeout: 30000 });
+  assert.match(await page.locator(panel('.session-expired')).innerText(), /Log back in to Sleeper[\s\S]*Log out of Sleeper, log back in, then reload this page\./);
+  assert.equal(await page.locator(panel('.mu-head, .card, .team-card')).count(), 0, 'no numbers from the logged-out fallbacks');
+  await page.screenshot({ path: `${OUT}session-expired.png` });
+  // The API log shows what failed.
+  await page.locator(panel('[data-tab="api"]')).click();
+  await page.locator(panel('.status.bad'), { hasText: '401' }).first().waitFor();
+  await page.locator(panel('[data-tab="page"]')).click();
+
+  // Logging back in gives the page a new token; a refresh then loads normally.
+  sleeper.rejectSession = false;
+  await page.evaluate((t) => localStorage.setItem('token', `${t}-fresh`), FAKE_TOKEN);
+  await page.locator(panel('[data-action="refresh"]')).click();
+  await page.locator(panel('.mu-head')).waitFor({ timeout: 30000 });
+  assert.equal(await page.locator(panel('.session-expired')).count(), 0);
   documentBody = LOGGED_OUT;
 });
 

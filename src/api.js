@@ -5,6 +5,9 @@
   const GRAPHQL = 'https://sleeper.com/graphql';
   const log = [];
   let nextId = 1;
+  // The session token Sleeper turned down (401/403), if any. It stays expired
+  // until the page holds a different token, i.e. after logging back in.
+  let rejectedToken = null;
 
   function record(entry) {
     log.unshift({ id: nextId++, at: Date.now(), ...entry });
@@ -18,6 +21,7 @@
       const res = await fetch(entry.url, init);
       const text = await res.text();
       Object.assign(entry, { status: res.status, ms: performance.now() - started, bytes: text.length });
+      if (entry.auth && (res.status === 401 || res.status === 403)) rejectedToken = entry.token;
       if (!res.ok) throw new Error(`${res.status} from ${entry.path}`);
       entry.json = JSON.parse(text);
       return entry.json;
@@ -55,6 +59,8 @@
     }
     const shown = Object.keys(variables).length ? `${query}\n\nvariables: ${JSON.stringify(variables)}` : query;
     const entry = record({ path: `graphql ${label}`, url: GRAPHQL, status: 'pending', request: shown, auth });
+    // Kept off the log entry's visible fields; only compared, never shown.
+    Object.defineProperty(entry, 'token', { value: headers.Authorization, enumerable: false });
     const json = await request(entry, {
       method: 'POST',
       headers,
@@ -72,5 +78,8 @@
     record({ path, url: REST + path, status: 'cache', ms: 0, bytes, json });
   }
 
-  return { get, graphql, cached, log, loggedIn: () => Boolean(sessionToken()) };
+  // Logged in, but Sleeper turned the session down: the page needs a fresh login.
+  const sessionExpired = () => rejectedToken != null && sessionToken() === rejectedToken;
+
+  return { get, graphql, cached, log, loggedIn: () => Boolean(sessionToken()), sessionExpired };
 };

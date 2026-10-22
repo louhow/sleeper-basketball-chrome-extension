@@ -171,3 +171,10 @@ test('renders while the week is still loading (taxi editable, no schedule yet)',
   assert.match(out, /Week 1 .* Loading week…/);
   assert.doesNotMatch(out, /Taxi Squad/, 'player cards wait for the schedule');
 });
+
+test('an expired Sleeper login shows how to fix it instead of numbers that would be wrong', () => {
+  const html = render(state({ sessionExpired: true, ready: true }), []);
+  assert.match(text(html), /Log back in to Sleeper .* Log out of Sleeper, log back in, then reload this page\./);
+  assert.doesNotMatch(html, /class="card|team-card|data-action="optimize"/);
+  assert.match(render(state({ sessionExpired: true, tab: 'api' }), [{ id: 1, at: 0, path: 'graphql me', status: 401, auth: true }]), /graphql me/, 'the API log stays available');
+});
