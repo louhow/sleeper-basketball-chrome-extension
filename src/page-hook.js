@@ -221,16 +221,18 @@
     if (document.documentElement.dataset.snpNbaLeague && document.querySelector(PLAYERS_PANEL)) patchPlayers();
   }, 500);
 
-  // Sleeper's rows are 796px with 60px stat columns after a fixed name area,
-  // which fits its 9 columns. With 11, every column narrows to 54px so all fit,
-  // and the name area may not shrink, so values stay under their headers.
+  // Sleeper's rows are 796px with 60px stat columns after the name area, which
+  // fits its 9 columns; with 11 the name area would shrink and pull every value
+  // left of its header. So every column narrows to 54px, and the name area keeps
+  // the 118px Sleeper's own rows have, which centers each value under its
+  // (left-aligned) header as Sleeper's table does.
   // Our headers read as named (not uppercase), on two lines.
   // adminFPTS wears the what-if color once a value differs from the league's.
   const ours = ':is(:nth-child(2 of .label), :nth-child(3 of .label))';
   const adminStyle = document.createElement('style');
   adminStyle.textContent = `
     html[data-snp-admin-col] ${PLAYERS_PANEL} :is(.stat-key-header > .label, .player-list-item > .cell) { flex-basis: 54px !important; }
-    html[data-snp-admin-col] ${PLAYERS_PANEL} .player-list-item > .player-meta-container { flex-shrink: 0 !important; }
+    html[data-snp-admin-col] ${PLAYERS_PANEL} .player-list-item > .player-meta-container { flex: 0 0 118px !important; }
     html[data-snp-admin-col] ${PLAYERS_PANEL} .stat-key-header > ${ours} span {
       text-transform: none; font-size: 10px; line-height: 11px; white-space: normal;
     }

@@ -101,7 +101,7 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
   .integration-players-panel .stat-key-header { padding-left: 176px; }
   .player-list-item { width: 796px; overflow: hidden; box-sizing: border-box; padding: 0; gap: 0; }
   .owner-cell { flex: 0 0 32px; margin-left: 9px; }
-  .player-meta-container { flex: 0 1 auto; width: 135px; min-width: 90px; }
+  .player-meta-container { flex: 0 1 auto; min-width: 90px; white-space: nowrap; overflow: hidden; }
   .label, .cell { display: flex; align-items: center; flex: 0 0 60px; margin-left: 2px; cursor: pointer; font-size: 12px; }
   .cell { justify-content: center; }
   .stat-key-header { gap: 0; padding-top: 0; padding-bottom: 0; }
@@ -114,6 +114,8 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
 <script>
   const LABELS = { fpts_proj: 'FPTS', sp: 'MIN', pts: 'PTS', tpm: '3PM', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' };
   const PLAYERS = ${JSON.stringify(players)};
+  // Rostered players show their owner under the name, which makes the name area wider.
+  const OWNERS = Object.fromEntries(PLAYERS.filter((p) => p.owner).map((p) => [p.id, p.owner]));
   const fiberOf = (props, depth = 0) => (depth ? { memoizedProps: {}, return: fiberOf(props, depth - 1) } : { memoizedProps: props });
   const panel = {
     props: { leagueId: '${LEAGUE}', sport: 'nba', scoringSettings: { pts: 1, reb: 1 } },
@@ -135,7 +137,7 @@ const playersTable = (players) => `<!doctype html><title>Sleeper</title>
     if (sort) view.sort((a, b) => (map[b.player_id][sort] || -1) - (map[a.player_id][sort] || -1));
     const grid = document.querySelector('.ReactVirtualized__Grid');
     grid.__reactInternalInstance$test = fiberOf({ players: view, playerStatsMap: map }, 3);
-    grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="owner-cell"></div><div class="player-meta-container">' + id + '</div>' +
+    grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="owner-cell"></div><div class="player-meta-container">' + id + (OWNERS[id] ? ' → ' + OWNERS[id] : '') + '</div>' +
       statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
     for (const row of grid.children) row.__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: { player: { player_id: row.dataset.id } } } };
   }
@@ -1246,7 +1248,7 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
 
 test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta columns beside FPTS', async () => {
   documentBody = playersTable([
-    { id: 'scorer', pos: 'PG', stats: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 } },
+    { id: 'scorer', pos: 'PG', owner: 'OuiThePeople the longest name', stats: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 } },
     { id: 'guard', pos: 'PG', stats: { fpts_proj: 31, pts: 29, reb: 2, gp: 1 } },
     { id: 'rebounder', pos: 'C', stats: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 } },
   ]);
@@ -1263,15 +1265,20 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   await shown('rebounder', '0');
   assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0'], 'matches FPTS until a value changes, so nobody moves');
   assert.equal(await page.locator('.stat-key-header .label span').nth(1).evaluate((el) => getComputedStyle(el).textTransform), 'none', 'reads as named');
-  // Every value sits under its header, and all 11 columns fit in Sleeper's 796px row.
+  // Every row, owner line or not, puts each value where Sleeper's table does
+  // (centered under its left-aligned header, 17px left of the header's box),
+  // and all 11 columns fit in Sleeper's 796px row.
   const layout = await page.evaluate(() => {
     const labels = [...document.querySelectorAll('.stat-key-header .label')].map((l) => l.getBoundingClientRect());
-    const row = document.querySelector('.player-list-item');
-    const cellBoxes = [...row.querySelectorAll('.cell')].map((c) => c.getBoundingClientRect());
-    return { offsets: labels.map((l, i) => Math.round(cellBoxes[i].x - l.x)), overflow: Math.round(cellBoxes.at(-1).right - row.getBoundingClientRect().right) };
+    return [...document.querySelectorAll('.player-list-item')].map((row) => {
+      const cellBoxes = [...row.querySelectorAll('.cell')].map((c) => c.getBoundingClientRect());
+      return { offsets: [...new Set(labels.map((l, i) => Math.round(cellBoxes[i].x - l.x)))], overflow: Math.round(cellBoxes.at(-1).right - row.getBoundingClientRect().right) };
+    });
   });
-  assert.deepEqual(layout.offsets, Array(11).fill(0), 'columns line up');
-  assert.ok(layout.overflow <= 0, `the last column fits (${layout.overflow}px over)`);
+  for (const row of layout) {
+    assert.deepEqual(row.offsets, [-17], 'columns line up');
+    assert.ok(row.overflow <= 0, `the last column fits (${row.overflow}px over)`);
+  }
 
   // The Scoring control is here too; changing a value rescores and reranks.
   await page.locator(corner('[data-wi="toggle-open"]')).click();
