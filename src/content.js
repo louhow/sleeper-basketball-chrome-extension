@@ -285,8 +285,10 @@
       const { stats, view, base } = JSON.parse(e.detail);
       const points = Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, s ? scoring.scoreStats(delta, s) : 0]));
       const ids = view.filter((id) => stats[id]?.[base] != null);
-      const was = model.ranks(ids, (id) => stats[id][base]);
-      const now = model.ranks(ids, (id) => stats[id][base] + points[id]);
+      // Ranked per game, as the table shows every stat (a season's stats are totals).
+      const games = (id) => (stats[id].gp > 0 ? stats[id].gp : 1);
+      const was = model.ranks(ids, (id) => stats[id][base] / games(id));
+      const now = model.ranks(ids, (id) => (stats[id][base] + points[id]) / games(id));
       const shifts = Object.fromEntries(ids.map((id) => [id, was[id] - now[id]]));
       const biggest = Math.max(0, ...Object.values(shifts).map(Math.abs));
       const tints = Object.fromEntries(ids.map((id) => [id, model.shiftTint(shifts[id], biggest)]));

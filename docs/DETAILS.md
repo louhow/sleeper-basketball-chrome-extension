@@ -90,7 +90,8 @@ It matches FPTS until a value changes, then turns purple.
 Next to it, **adminDelta** shows how many places adminFPTS moves each player compared with FPTS, within the list on screen (after Sleeper's position, search and owned filters), so filtering to centers ranks centers against each other.
 Under the badge are both places, "#13→#42" (rank by FPTS, then by adminFPTS), to check a shift at a glance.
 It reads "+3" on green for a riser and "−2" on red for a faller, deeper the bigger the move relative to the biggest one in the list; ties share a rank, so nobody moves until a value changes.
-Click any of the three headers to sort by it, as with Sleeper's other columns (adminDelta puts the biggest risers first).
+Click any of the three headers to sort by it, as with Sleeper's other columns (adminDelta puts the biggest risers first); a thin teal bar marks the sorted column.
+Sleeper shows every stat per game but stores (and sorts) season stats as totals, so adminFPTS is stored per game and adminDelta ranks per game: both sort and rank by the number on screen.
 How it hooks in: `src/page-hook.js` adds `adminFPTS` and `adminDelta` to the stat keys and per-player stats of Sleeper's own table component, so Sleeper renders and sorts them.
 Sleeper's rows only fit 9 stat columns at 60px, so with these two every column narrows to 54px, the name area keeps Sleeper's 118px (rows with an owner line would otherwise be wider), and the headers wrap onto two lines, keeping each value under its header.
 Sleeper prints every stat with one decimal, so adminDelta's cell gets a badge on top; the list on screen is read from Sleeper's list component (`players`).

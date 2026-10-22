@@ -1265,12 +1265,14 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
     { id: 'scorer', pos: 'PG', owner: 'OuiThePeople the longest name', stats: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 } },
     { id: 'guard', pos: 'PG', stats: { fpts_proj: 31, pts: 29, reb: 2, gp: 1 } },
     { id: 'rebounder', pos: 'C', stats: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 } },
+    // Two games: Sleeper stores totals and shows them per game (31.0), but sorts on the totals.
+    { id: 'veteran', pos: 'SF', stats: { fpts_proj: 62, pts: 60, reb: 2, gp: 2 } },
   ]);
   await page.goto(`${PLAYERS_URL}?snp-admin=1`);
   const labels = () => page.locator('.stat-key-header .label').allTextContents();
   const order = () => page.locator('.player-list-item').evaluateAll((rows) => rows.map((r) => r.dataset.id));
   // FPTS, admin FPTS, admin Delta, then PTS and REB.
-  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).evaluateAll((els) => els.map((el) => el.querySelector('.snp-delta')?.textContent ?? el.textContent))
+  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).evaluateAll((els) => els.map((el) => el.querySelector('.snp-delta, .snp-admin-value')?.textContent ?? el.textContent))
     .then((all) => [...all.slice(0, 3), all[4], all[6]]);
   const badge = (id) => page.locator(`.player-list-item[data-id="${id}"] .snp-delta`);
   const shown = async (id, text) => page.waitForFunction(([i, t]) => document.querySelector(`.player-list-item[data-id="${i}"] .snp-delta`)?.textContent === t, [id, text]);
@@ -1278,6 +1280,7 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   assert.deepEqual(await labels(), ['FPTS', 'admin FPTS', 'admin Delta', 'MIN', 'PTS', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO'], 'right after FPTS');
   await shown('rebounder', '0');
   assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '0', '10.0', '20.0'], 'matches FPTS until a value changes, so nobody moves');
+  assert.deepEqual(await cells('veteran'), ['31.0', '31.0', '0', '30.0', '1.0'], 'per game, like every column');
   assert.equal(await page.locator('.stat-key-header .label span').nth(1).evaluate((el) => getComputedStyle(el).textTransform), 'none', 'reads as named');
   // Every row, owner line or not, puts each value where Sleeper's table does
   // (centered under its left-aligned header, 17px left of the header's box),
@@ -1298,30 +1301,37 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   await page.locator(corner('[data-wi="toggle-open"]')).click();
   const reb = page.locator(corner('input[data-wi-key="reb"]'));
   await reb.fill(String((await reb.inputValue()) * 1 + 2));
-  await shown('rebounder', '+2');
-  assert.deepEqual(await cells('rebounder'), ['30.0', '70.0', '+2', '10.0', '20.0']);
+  await shown('rebounder', '+3');
+  assert.deepEqual(await cells('rebounder'), ['30.0', '70.0', '+3', '10.0', '20.0']);
   assert.deepEqual(await cells('scorer'), ['32.0', '36.0', '−1', '30.0', '2.0']);
+  assert.deepEqual(await cells('veteran'), ['31.0', '33.0', '−2', '30.0', '1.0'], 'ranked per game, not on its two-game total');
   // Both places show under the badge, to check a shift at a glance.
-  assert.equal(await page.locator('.player-list-item[data-id="rebounder"] .snp-places').textContent(), '#3→#1');
+  assert.equal(await page.locator('.player-list-item[data-id="rebounder"] .snp-places').textContent(), '#4→#1');
+  assert.equal(await page.locator('.player-list-item[data-id="veteran"] .snp-places').textContent(), '#2→#4');
   assert.equal(await page.locator('.player-list-item[data-id="scorer"] .snp-places').textContent(), '#1→#2');
   assert.match(await page.locator('.player-list-item[data-id="scorer"] [data-snp-delta]').getAttribute('title'), /Rank by FPTS 1, by adminFPTS 2/);
   const color = await page.locator('.player-list-item[data-id="rebounder"] .cell').nth(1).evaluate((el) => getComputedStyle(el).color);
   assert.equal(color, 'rgb(182, 156, 255)', 'adminFPTS in the what-if color once a value changes');
   // Green up, red down, deeper for the bigger move.
   assert.equal(await badge('rebounder').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(52, 168, 83, 0.9)');
-  assert.equal(await badge('scorer').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(214, 69, 80, 0.55)');
+  assert.equal(await badge('scorer').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgba(214, 69, 80, 0.43)');
   await page.keyboard.press('Escape');
 
-  // All three columns sort from their headers.
-  assert.deepEqual(await order(), ['scorer', 'guard', 'rebounder'], 'sorted by FPTS');
+  // All three columns sort from their headers, with a thin bar under the sorted one.
+  const sortedLabel = () => page.locator('.stat-key-header .label').evaluateAll((els) => els.filter((el) => el.hasAttribute('data-snp-sorted')).map((el) => el.textContent));
+  assert.deepEqual(await order(), ['veteran', 'scorer', 'guard', 'rebounder'], "sorted by FPTS (Sleeper's own column sorts on totals)");
+  assert.deepEqual(await sortedLabel(), ['FPTS']);
+  assert.equal(await page.locator('.stat-key-header .label[data-snp-sorted]').evaluate((el) => getComputedStyle(el, '::after').backgroundColor), 'rgb(0, 206, 184)');
   await page.locator('.stat-key-header .label', { hasText: 'admin FPTS' }).click();
-  assert.deepEqual(await order(), ['rebounder', 'scorer', 'guard'], 'sorted by adminFPTS');
+  assert.deepEqual(await order(), ['rebounder', 'scorer', 'guard', 'veteran'], 'sorted by adminFPTS per game, as shown');
+  await page.waitForFunction(() => document.querySelector('.stat-key-header .label[data-snp-sorted]')?.textContent === 'admin FPTS');
   await page.locator('.stat-key-header .label', { hasText: 'admin Delta' }).click();
-  assert.equal((await order())[0], 'rebounder', 'sorted by adminDelta, biggest riser first');
-  await shown('rebounder', '+2');
+  assert.deepEqual(await order(), ['rebounder', 'scorer', 'guard', 'veteran'], 'sorted by adminDelta, biggest riser first');
+  await shown('rebounder', '+3');
+  await page.waitForFunction(() => document.querySelector('.stat-key-header .label[data-snp-sorted]')?.textContent === 'admin Delta');
   await page.screenshot({ path: `${OUT}whatif-players.png` });
   await page.locator('.stat-key-header .label', { hasText: /^FPTS$/ }).click();
-  assert.deepEqual(await order(), ['scorer', 'guard', 'rebounder']);
+  assert.deepEqual(await order(), ['veteran', 'scorer', 'guard', 'rebounder']);
 
   // Ranks are within the list on screen: among guards only, nobody moves.
   await page.locator('.filters [data-pos="PG"]').click();

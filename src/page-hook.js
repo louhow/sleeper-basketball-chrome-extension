@@ -160,7 +160,10 @@
       update.playerStatsMap = Object.fromEntries(Object.entries(map).map(([id, stats]) => {
         if (stats?.[base] == null) return [id, stats];
         const { [DELTA_KEY]: _, ...rest } = stats;
-        const out = { ...rest, [ADMIN_KEY]: stats[base] + (scores.points[id] ?? 0) };
+        // Per game, so it sorts by the number on screen: Sleeper shows every stat
+        // per game (a season's stats are totals) but sorts on the stored value.
+        const games = stats.gp > 0 ? stats.gp : 1;
+        const out = { ...rest, [ADMIN_KEY]: (stats[base] + (scores.points[id] ?? 0)) / games };
         if (inView.has(id)) out[DELTA_KEY] = DELTA_OFFSET + (scores.shifts[id] ?? 0);
         return [id, out];
       }));
@@ -181,38 +184,54 @@
     decorateRows();
   }
 
-  // Sleeper prints every stat per game with one decimal ("3.0"), so adminDelta
-  // shows as a badge over its cell: "+3" in green, "−2" in red, deeper the
-  // further the player moves, with both places under it ("#13→#42").
+  // A span of ours over a cell whose own text (Sleeper's, hidden) can't say what we mean.
+  function overlay(cell, cls) {
+    if (!cell.hasAttribute('data-snp-cell')) cell.setAttribute('data-snp-cell', '');
+    let el = cell.querySelector(`:scope > .${cls}`);
+    if (!el) {
+      el = document.createElement('span');
+      el.className = cls;
+      cell.append(el);
+    }
+    return el;
+  }
+
+  // Sleeper divides every stored stat by games played and prints one decimal.
+  // adminFPTS is stored per game already (to sort right), so its number is
+  // drawn over the cell; adminDelta shows as a badge: "+3" in green, "−2" in
+  // red, deeper the further the player moves, with both places under it
+  // ("#13→#42"). The sorted column's header gets a thin bar under it.
   // Rows mount as the list scrolls, so they're watched.
   function decorateRows() {
     const panel = playersPanel();
-    const k = panel?.state.statKeys?.indexOf(DELTA_KEY) ?? -1;
+    const keys = panel?.state.statKeys || [];
+    const k = keys.indexOf(DELTA_KEY);
     if (k < 0) return;
+    const labels = document.querySelectorAll(`${PLAYERS_PANEL} .stat-key-header > .label`);
+    labels.forEach((label, i) => {
+      const sorted = keys[i] === panel.state.sort;
+      if (label.hasAttribute('data-snp-sorted') !== sorted) label.toggleAttribute('data-snp-sorted', sorted);
+    });
+    const kAdmin = keys.indexOf(ADMIN_KEY);
     const map = panel.state.playerStatsMap || {};
     for (const row of document.querySelectorAll(`${PLAYERS_PANEL} .player-list-item`)) {
-      const cell = row.querySelectorAll(':scope > .cell')[k];
+      const cells = row.querySelectorAll(':scope > .cell');
+      const cell = cells[k];
       const id = fiber(row, (x) => x.player?.player_id)?.memoizedProps.player.player_id;
       if (!cell || id == null) continue;
+      const perGame = map[id]?.[ADMIN_KEY];
+      const value = overlay(cells[kAdmin], 'snp-admin-value');
+      const shown = perGame == null ? '-' : perGame.toFixed(1);
+      if (value.textContent !== shown) value.textContent = shown;
       const stored = map[id]?.[DELTA_KEY];
       const shift = stored == null ? null : stored - DELTA_OFFSET;
       const text = shift == null ? '-' : shift > 0 ? `+${shift}` : shift < 0 ? `−${-shift}` : '0';
       if (!cell.hasAttribute('data-snp-delta')) cell.setAttribute('data-snp-delta', '');
-      let badge = cell.querySelector(':scope > .snp-delta');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'snp-delta';
-        cell.append(badge);
-      }
+      const badge = overlay(cell, 'snp-delta');
       if (badge.textContent !== text) badge.textContent = text;
       const [was, now] = places[id] || [];
       const where = was && admin.changed ? `#${was}→#${now}` : '';
-      let line = cell.querySelector(':scope > .snp-places');
-      if (!line) {
-        line = document.createElement('span');
-        line.className = 'snp-places';
-        cell.append(line);
-      }
+      const line = overlay(cell, 'snp-places');
       if (line.textContent !== where) {
         line.textContent = where;
         cell.title = where && `Rank by FPTS ${was}, by adminFPTS ${now}, among the players listed`;
@@ -264,7 +283,13 @@
     }
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > ${ours} span,
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .player-list-item > :nth-child(2 of .cell) { color: #b69cff !important; }
-    ${PLAYERS_PANEL} [data-snp-delta] { font-size: 0 !important; flex-direction: column; gap: 2px; }
+    ${PLAYERS_PANEL} [data-snp-cell] { font-size: 0 !important; }
+    ${PLAYERS_PANEL} .snp-admin-value { font-size: 12px; }
+    ${PLAYERS_PANEL} [data-snp-delta] { flex-direction: column; gap: 2px; }
+    ${PLAYERS_PANEL} .stat-key-header > .label { position: relative; }
+    ${PLAYERS_PANEL} .stat-key-header > .label[data-snp-sorted]::after {
+      content: ''; position: absolute; left: 0; width: 24px; bottom: 3px; height: 2px; border-radius: 1px; background: #00ceb8;
+    }
     ${PLAYERS_PANEL} .snp-places { font-size: 9px; line-height: 10px; color: rgba(255, 255, 255, 0.55); white-space: nowrap; font-variant-numeric: tabular-nums; }
     ${PLAYERS_PANEL} .snp-places:empty { display: none; }
     ${PLAYERS_PANEL} .snp-delta {
