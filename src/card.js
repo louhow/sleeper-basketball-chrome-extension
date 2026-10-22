@@ -2,7 +2,7 @@
 // (bio, rankings), then game logs, career and transaction history on the left
 // and latest news and the depth chart on the right. Pure: state -> HTML.
 (globalThis.SNP ||= {}).card = (() => {
-  const { esc, f2, teamLogo, shortName, scoringOf, whatIfOn, whatIfBanner } = globalThis.SNP.ui;
+  const { esc, f2, teamLogo, shortName, scoringOf, adminScoring, whatIfOn, whatIfBanner } = globalThis.SNP.ui;
   const { scoreStats } = globalThis.SNP.scoring;
   const { scoreTier } = globalThis.SNP.model;
   const CDN = 'https://sleepercdn.com';
@@ -71,7 +71,8 @@
   const pct = (made, att) => (att ? made / att : null);
 
   // One row per game of a season: played games from stats, upcoming ones from projections.
-  function gameLog(log, scoring) {
+  // Projections use `scoring`; played games `fpts` (the league's), plus `admin` (what-if) when given.
+  function gameLog(log, scoring, { fpts = scoring, admin = null } = {}) {
     const byGame = new Map();
     const rows = (data) => Object.values(data || {}).flat().filter(Boolean);
     for (const r of rows(log?.proj)) byGame.set(r.game_id || r.date, { ...base(r), proj: scoreStats(scoring, r.stats || {}) });
@@ -81,7 +82,8 @@
       const key = r.game_id || r.date;
       byGame.set(key, {
         ...byGame.get(key), ...base(r), played: true,
-        fpts: scoreStats(scoring, s),
+        fpts: scoreStats(fpts, s),
+        ...(admin && { adminFpts: scoreStats(admin, s) }),
         min: s.sp != null ? s.sp / 60 : null,
         pts: s.pts ?? 0, reb: s.reb ?? 0, ast: s.ast ?? 0, stl: s.stl ?? 0, blk: s.blk ?? 0, to: s.to ?? 0,
         fgm: s.fgm ?? 0, fga: s.fga ?? 0, tpm: s.tpm ?? 0, tpa: s.tpa ?? 0, ftm: s.ftm ?? 0, fta: s.fta ?? 0,
@@ -192,7 +194,10 @@
     // Switching seasons keeps the previous season on screen, dimmed, until the new one arrives.
     const stale = !c.logs?.[season] && m.prevSeason != null && c.logs?.[m.prevSeason];
     const log = c.logs?.[season] || stale;
-    const rows = log ? gameLog(log, scoringOf(s)) : null;
+    // With admin tools on, Fpts is the league's and adminFPTS the what-if values, side by side.
+    const admin = adminScoring(s);
+    const rows = log ? gameLog(log, scoringOf(s), { fpts: s.league?.scoring_settings || {}, admin }) : null;
+    const width = admin ? 16 : 15;
     const played = (rows || []).filter((r) => r.played);
     const cols = [
       ['min', false], ['pts', false], ['reb', false], ['ast', false], ['stl', false], ['blk', false], ['to', true],
@@ -204,8 +209,8 @@
       ft: scaler(played.map((r) => ({ v: pct(r.ftm, r.fta) })), 'v'),
     };
     const md = (date) => (date ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : '');
-    const body = !rows ? skeleton(SKELETON_ROWS, 15)
-      : !rows.length ? '<tr><td colspan="15"><p class="pc-empty">No games this season.</p></td></tr>'
+    const body = !rows ? skeleton(SKELETON_ROWS, width)
+      : !rows.length ? `<tr><td colspan="${width}"><p class="pc-empty">No games this season.</p></td></tr>`
       : rows.map((r) => {
         const cell = (k, digits = 0) => `<td${r.played ? heat(scale[k](r[k])) : ''}>${r.played ? num(r[k], digits) : '-'}</td>`;
         const ratio = (made, att, key) => `<td${r.played ? heat(shoot[key](pct(r[made], r[att]))) : ''}>${r.played ? `${r[made]}-${r[att]}` : '-'}</td>`;
@@ -213,6 +218,7 @@
           <td class="dim">${dash(r.week)}</td><td class="dim">${md(r.date)}</td><td class="opp">${r.away ? '@' : ''}${esc(r.opp || '')}</td>
           <td class="dim">${r.proj != null ? f2(r.proj) : '-'}</td>
           <td class="fpts${r.played ? ` ${scoreTier(r.fpts)}` : ''}">${r.played ? f2(r.fpts) : '-'}</td>
+          ${admin ? `<td class="fpts admin${r.played ? ` ${scoreTier(r.adminFpts)}` : ''}">${r.played ? f2(r.adminFpts) : '-'}</td>` : ''}
           ${cell('min')}${cell('pts')}${cell('reb')}${cell('ast')}${cell('stl')}${cell('blk')}${cell('to')}
           ${ratio('fgm', 'fga', 'fg')}${ratio('tpm', 'tpa', 'tp')}${ratio('ftm', 'fta', 'ft')}
         </tr>`;
@@ -221,8 +227,8 @@
       <div class="pc-section-head"><h2>Game Logs</h2>${tabs ? `<div class="pc-seasons" role="tablist">${tabs}</div>` : ''}</div>
       <table class="pc-table log${stale ? ' stale' : ''}" aria-busy="${!c.logs?.[season]}">
         <thead>
-          <tr class="group"><th colspan="4"></th><th colspan="2">Fantasy</th><th colspan="6">Stats</th><th colspan="3">Shooting</th></tr>
-          <tr><th>Wk</th><th>Date</th><th>Opp</th><th>Proj</th><th class="fpts">Fpts</th><th>Min</th>
+          <tr class="group"><th colspan="3"></th><th colspan="${admin ? 3 : 2}">Fantasy</th><th colspan="7">Stats</th><th colspan="3">Shooting</th></tr>
+          <tr><th>Wk</th><th>Date</th><th>Opp</th><th>Proj</th><th class="fpts">Fpts</th>${admin ? '<th class="fpts admin">adminFPTS</th>' : ''}<th>Min</th>
             <th>Pts</th><th>Reb</th><th>Ast</th><th>Stl</th><th>Blk</th><th>To</th><th>Fg</th><th>3pt</th><th>Ft</th></tr>
         </thead>
         <tbody>${body}</tbody>

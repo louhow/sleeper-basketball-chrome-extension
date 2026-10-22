@@ -54,3 +54,27 @@ test('game log colors fantasy points by score tier', () => {
   const tiers = [...card.render(s).matchAll(/<td class="fpts ([a-z]+)">([\d.]+)</g)].map((m) => [m[2], m[1]]);
   assert.deepEqual(tiers, [['30.00', 'green'], ['18.00', 'yellow'], ['9.00', 'red']]);
 });
+
+test('with admin tools on, the game log shows league Fpts and what-if adminFPTS side by side', () => {
+  const game = (id, date, pts) => ({ game_id: id, date, week: 1, opponent: 'GSW', stats: { pts } });
+  const s = (whatIf) => ({
+    modal: { kind: 'player', playerId: 'p1', season: 2026 },
+    league: { season: '2026', scoring_settings: { pts: 1 } },
+    players: { p1: { name: 'Test Player', positions: ['PG'], team: 'LAL' } },
+    cards: { p1: { seasons: [2026], logs: { 2026: { stats: { 1: [game('a', '2026-10-21', 20), game('b', '2026-10-22', 10)] } } } } },
+    whatIf: { overrides: { pts: 1.5 }, drafts: {}, ...whatIf },
+  });
+  const cells = (html) => [...html.matchAll(/<td class="fpts( admin)? ([a-z]+)">([\d.]+)</g)].map((m) => `${m[1] ? 'admin' : 'league'} ${m[3]} ${m[2]}`);
+
+  const off = card.render(s({ enabled: false, on: true }));
+  assert.doesNotMatch(off, /adminFPTS/, 'hidden without ?snp-admin=1');
+  assert.match(off, /<th colspan="3"><\/th><th colspan="2">Fantasy<\/th><th colspan="7">Stats<\/th>/);
+
+  // Fpts stays the league's even with what-if switched on; adminFPTS always uses the what-if values.
+  for (const on of [false, true]) {
+    const html = card.render(s({ enabled: true, on }));
+    assert.match(html, /<th class="fpts">Fpts<\/th><th class="fpts admin">adminFPTS<\/th><th>Min<\/th>/);
+    assert.match(html, /<th colspan="3"><\/th><th colspan="3">Fantasy<\/th><th colspan="7">Stats<\/th>/);
+    assert.deepEqual(cells(html), ['league 20.00 yellow', 'admin 30.00 green', 'league 10.00 red', 'admin 15.00 yellow']);
+  }
+});

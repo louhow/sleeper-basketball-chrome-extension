@@ -83,6 +83,8 @@ While what-if is on, it's hard to miss:
 - Sleeper's own totals (`points`, `proj_points`, `players_points`) are scored with the league's settings, so they're set aside and added up from Lock-In rules instead.
 - Lock-In and Optimize lineup are off, since they act on real points: a lock is final, and Optimize picks with the league's scoring.
 
+The player card's game log gets the same pair: **Fpts** with the league's scoring and **adminFPTS** with the what-if values (switched on or not), both in score-tier colors; Proj follows the League/What-if switch.
+
 On the Players tab, an **adminFPTS** column sits right after Sleeper's FPTS (league scoring) and always uses the what-if values, switched on or not.
 It matches FPTS until a value changes, then turns purple.
 Next to it, **adminDelta** shows how many places adminFPTS moves each player compared with FPTS, within the list on screen (after Sleeper's position, search and owned filters), so filtering to centers ranks centers against each other.

@@ -1219,6 +1219,14 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
   await page.locator(panel('.card button.name')).first().click();
   await page.locator(dialog('.pc.whatif .whatif-banner')).waitFor({ timeout: 30000 });
   await page.locator(dialog('.pc-table.log tbody tr:not(.skeleton)')).first().waitFor({ timeout: 30000 });
+  // Its game log shows the league's Fpts and the what-if adminFPTS side by side.
+  assert.deepEqual(await page.locator(dialog('.pc-table.log thead tr:not(.group) th')).allTextContents(),
+    ['Wk', 'Date', 'Opp', 'Proj', 'Fpts', 'adminFPTS', 'Min', 'Pts', 'Reb', 'Ast', 'Stl', 'Blk', 'To', 'Fg', '3pt', 'Ft']);
+  const played = page.locator(dialog('.pc-table.log tbody tr')).filter({ has: page.locator('td.fpts.admin:not(:text("-"))') }).first();
+  if (await played.count()) {
+    const [fpts, adminFpts] = (await played.locator('td.fpts').allTextContents()).map(Number);
+    assert.ok(adminFpts > fpts, `adminFPTS (${adminFpts}) beats Fpts (${fpts}) with points worth more`);
+  }
   const box = await page.locator(corner('.wi-dock')).boundingBox();
   assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [box.x + box.width / 2, box.y + box.height / 2]), 'sleeper-nba-scoring');
   await page.screenshot({ path: `${OUT}whatif-card.png` });

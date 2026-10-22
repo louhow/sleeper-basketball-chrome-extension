@@ -2315,6 +2315,11 @@ button.danger.solid:hover:not(:disabled) {
 .app.whatif .team-card .score .pts,
 .app.whatif .mu-pts,
 .app.whatif .mp-pts b,
+/* The game log's adminFPTS header reads as named, in the what-if color. */
+.pc-table thead tr:not(.group) th.admin {
+  color: var(--whatif);
+  text-transform: none;
+}
 .pc.whatif .pc-table.log td:nth-child(4) {
   color: var(--whatif);
 }

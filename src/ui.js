@@ -185,6 +185,13 @@
     return whatIfOn(s) ? globalThis.SNP.scoring.withOverrides(league, s.whatIf.overrides) : league;
   }
 
+  // The what-if values whenever the admin tools are on, switched on or not
+  // (the Players tab's and game log's adminFPTS); null when they're off.
+  function adminScoring(s) {
+    if (!s.whatIf?.enabled) return null;
+    return globalThis.SNP.scoring.withOverrides(s.league?.scoring_settings || {}, s.whatIf.overrides || {});
+  }
+
   // The what-if changes in a few words, e.g. "Points Scored 0.5 → 1, Blocks 2 → 3".
   function whatIfChanges(s, max = 3) {
     const league = s.league?.scoring_settings || {};
@@ -204,7 +211,7 @@
   }
 
   return {
-    reserveRule, whatIfOn, scoringOf, whatIfChanges, whatIfBanner,
+    reserveRule, whatIfOn, scoringOf, adminScoring, whatIfChanges, whatIfBanner,
     esc, f2, CDN, headshot, teamLogo, teamName, avatar, record, shortName, injuryTag, positions,
     gameTime, weekday, nextGame, dialog, dialogErrors, slotBadge, weekNav, notice, lineup, taxiRule, owns,
   };
