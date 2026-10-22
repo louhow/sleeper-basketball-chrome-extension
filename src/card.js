@@ -222,11 +222,15 @@
         const added = t.adds?.[id];
         const dropped = t.drops?.[id];
         const team = (rid) => teamName(s, byRoster[rid]);
+        const pick = t.draft_picks?.[0] || t.metadata?.pick_no;
         const what = t.type === 'waiver' ? `claimed by ${team(added)}${t.settings?.waiver_bid != null ? ` for $${t.settings.waiver_bid}` : ''}`
           : t.type === 'free_agent' && added != null ? `added by ${team(added)}`
           : t.type === 'free_agent' ? `dropped by ${team(dropped)}`
-          : t.type === 'trade' ? `traded to ${team(added)}` : t.type;
-        return `<li><span class="kind">${esc(t.type)}</span><span>${esc(what)}</span><span class="sub">${esc(when(t.status_updated || t.created))}${t.status !== 'complete' ? ` · ${esc(t.status)}` : ''}</span></li>`;
+          : t.type === 'trade' ? `traded to ${team(added)}`
+          : t.type === 'draft_pick' ? `drafted by ${team(added)}${t.metadata?.round ? ` (round ${t.metadata.round}, pick ${t.metadata.pick_no ?? t.metadata.pick ?? '?'})` : pick?.round ? ` (round ${pick.round})` : ''}`
+          : t.type;
+        const kind = String(t.type || '').replace(/_/g, ' ');
+        return `<li><span class="kind">${esc(kind)}</span><span>${esc(what)}</span><span class="sub">${esc(when(t.status_updated || t.created))}${t.status !== 'complete' ? ` · ${esc(t.status)}` : ''}</span></li>`;
       }).join('')}</ul>`;
     const career = c.career == null ? '<p class="msg">Loading…</p>' : `<table class="career">
       <thead><tr><th>Season</th><th class="num">GP</th><th class="num">MIN</th><th class="num">G</th><th class="num">AST</th><th class="num">FPTS</th><th class="num">Rank</th></tr></thead>

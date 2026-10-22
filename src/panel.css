@@ -569,9 +569,12 @@ ol.claims { margin: 0; padding: 0; list-style: none; }
 .op-proj { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; font-weight: 700; }
 
 /* Player card */
-.card-dialog { width: min(760px, 100%); }
+/* The card keeps one height across its tabs, and the hero and tab bar never shrink to fit the body. */
+.card-dialog { width: min(760px, 100%); height: min(860px, calc(100vh - 48px)); }
+.card-dialog .dialog-body { flex: 1 1 auto; }
 .hero {
   position: relative;
+  flex: none;
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr) auto;
   gap: 16px;
@@ -597,7 +600,7 @@ ol.claims { margin: 0; padding: 0; list-style: none; }
 .hero-btn { padding: 8px 16px; border-radius: 20px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; }
 .hero-btn.add { background: rgba(123, 216, 143, 0.9); color: #0d1421; }
 .hero-btn.drop { background: rgba(255, 91, 110, 0.85); color: #fff; }
-.card-tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 12px; }
+.card-tabs { flex: none; display: flex; border-bottom: 1px solid var(--line); padding: 0 12px; }
 .card-tabs button { background: transparent; color: var(--muted); font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; padding: 10px 12px; border-radius: 0; border-bottom: 2px solid transparent; }
 .card-tabs button.active { color: var(--text); border-bottom-color: var(--text); background: transparent !important; }
 .card-dialog h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
