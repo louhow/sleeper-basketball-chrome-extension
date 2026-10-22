@@ -12,6 +12,7 @@ User-facing docs: `README.md` (install, privacy) and `docs/DETAILS.md` (features
 - Browser testing is headless only (Playwright). The user's real Chrome is for reading live data with their session, not for testing.
 - Writes against the live league (bids, lineup, taxi, IR) only with the user's go-ahead; tell them exactly what is left to undo.
 - npm registry is `registry.npmjs.org` (see `.npmrc`); no work registries.
+- One-off analysis (league data pulls, scoring studies, scripts and their outputs) goes in `analysis/<topic>/`, which is gitignored. The repo is public and the data names league members, so none of it is ever committed, quoted in docs or used in tests. `analysis/scoring-2026/` holds the 2025-season scoring study: run its Python scripts from that folder with `python3 -I`.
 
 ## Layout
 

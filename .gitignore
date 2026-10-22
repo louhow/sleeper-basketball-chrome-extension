@@ -14,3 +14,6 @@ playwright-report/
 *.log
 .vscode/
 .idea/
+
+# Local analysis (league data, one-off scripts); see AGENTS.md
+analysis/
