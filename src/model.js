@@ -531,18 +531,20 @@
       bid(b) - bid(a) || priority(a) - priority(b) || String(a.transaction_id).localeCompare(String(b.transaction_id)));
   }
 
+  // Each id's place when the list is ranked by `value`, highest first. Ties
+  // share a place, as in standings.
+  function ranks(ids, value) {
+    const sorted = ids.map(value).sort((a, b) => b - a);
+    const first = new Map();
+    sorted.forEach((v, i) => { if (!first.has(v)) first.set(v, i + 1); });
+    return Object.fromEntries(ids.map((id) => [id, first.get(value(id))]));
+  }
+
   // How many places each player moves when a list is ranked by `after` instead
-  // of `before` (positive = up). Ties share a rank, as in standings, so nothing
-  // moves until a value changes.
+  // of `before` (positive = up), so nothing moves until a value changes.
   function rankShift(ids, before, after) {
-    const ranks = (value) => {
-      const sorted = ids.map(value).sort((a, b) => b - a);
-      const first = new Map();
-      sorted.forEach((v, i) => { if (!first.has(v)) first.set(v, i + 1); });
-      return (id) => first.get(value(id));
-    };
-    const [was, now] = [ranks(before), ranks(after)];
-    return Object.fromEntries(ids.map((id) => [id, was(id) - now(id)]));
+    const [was, now] = [ranks(ids, before), ranks(ids, after)];
+    return Object.fromEntries(ids.map((id) => [id, was[id] - now[id]]));
   }
 
   // Background for a rank shift: green up, red down, deeper the further it moves
@@ -556,7 +558,7 @@
   }
 
   return {
-    rankShift, shiftTint,
+    ranks, rankShift, shiftTint,
     weekDays, gamesByTeam, pointsByGame, playerDays, lockInDefault, ownedPicks, spotRefs, swapTargets, applyMove, describeMove,
     taxiEligible, taxiOpen, reserveEligible,
     lockedGameId, lockState, scoreTier, bestLineup, bestNflLineup, cheapestAssignment, winProbability, standingsRanks,

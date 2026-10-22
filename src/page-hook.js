@@ -83,6 +83,7 @@
   let admin = null;
   let adminVersion = 0;
   let tints = {};
+  let places = {}; // player id -> [FPTS place, adminFPTS place] in the list on screen
 
   document.addEventListener('snp:admin-scoring', (e) => {
     admin = JSON.parse(e.detail);
@@ -93,7 +94,7 @@
   // From the extension, which answers before dispatchEvent returns: per player,
   // the points the changed settings add, and for the players in view, their rank shift and its color.
   function adminScores(stats, view, base) {
-    let out = { points: {}, shifts: {}, tints: {} };
+    let out = { points: {}, shifts: {}, tints: {}, places: {} };
     const take = (e) => {
       out = JSON.parse(e.detail);
     };
@@ -153,7 +154,7 @@
     const viewKey = `${adminVersion}|${[...view].sort().join(',')}`;
     const update = {};
     if (map && (panel.snpMap !== map || panel.snpVersion !== adminVersion || panel.snpViewKey !== viewKey)) {
-      const scores = admin.changed ? adminScores(map, view, base) : { points: {}, shifts: {}, tints: {} };
+      const scores = admin.changed ? adminScores(map, view, base) : { points: {}, shifts: {}, tints: {}, places: {} };
       const inView = new Set(view);
       // New objects per player, so Sleeper's rows see the change and re-render.
       update.playerStatsMap = Object.fromEntries(Object.entries(map).map(([id, stats]) => {
@@ -164,6 +165,7 @@
         return [id, out];
       }));
       tints = scores.tints;
+      places = scores.places;
       panel.snpVersion = adminVersion;
       panel.snpViewKey = viewKey;
     }
@@ -181,7 +183,8 @@
 
   // Sleeper prints every stat per game with one decimal ("3.0"), so adminDelta
   // shows as a badge over its cell: "+3" in green, "−2" in red, deeper the
-  // further the player moves. Rows mount as the list scrolls, so they're watched.
+  // further the player moves, with both places under it ("#13→#42").
+  // Rows mount as the list scrolls, so they're watched.
   function decorateRows() {
     const panel = playersPanel();
     const k = panel?.state.statKeys?.indexOf(DELTA_KEY) ?? -1;
@@ -202,6 +205,18 @@
         cell.append(badge);
       }
       if (badge.textContent !== text) badge.textContent = text;
+      const [was, now] = places[id] || [];
+      const where = was && admin.changed ? `#${was}→#${now}` : '';
+      let line = cell.querySelector(':scope > .snp-places');
+      if (!line) {
+        line = document.createElement('span');
+        line.className = 'snp-places';
+        cell.append(line);
+      }
+      if (line.textContent !== where) {
+        line.textContent = where;
+        cell.title = where && `Rank by FPTS ${was}, by adminFPTS ${now}, among the players listed`;
+      }
       // Compared with what was set, since the browser rewrites style values.
       const tint = (shift && tints[id]) || '';
       if (badge.dataset.tint !== tint) {
@@ -249,7 +264,9 @@
     }
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > ${ours} span,
     html[data-snp-admin-changed] ${PLAYERS_PANEL} .player-list-item > :nth-child(2 of .cell) { color: #b69cff !important; }
-    ${PLAYERS_PANEL} [data-snp-delta] { font-size: 0 !important; }
+    ${PLAYERS_PANEL} [data-snp-delta] { font-size: 0 !important; flex-direction: column; gap: 2px; }
+    ${PLAYERS_PANEL} .snp-places { font-size: 9px; line-height: 10px; color: rgba(255, 255, 255, 0.55); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    ${PLAYERS_PANEL} .snp-places:empty { display: none; }
     ${PLAYERS_PANEL} .snp-delta {
       min-width: 28px; padding: 2px 6px; border-radius: 4px; box-sizing: border-box;
       font-size: 12px; font-weight: 700; text-align: center; color: rgba(255, 255, 255, 0.45); font-variant-numeric: tabular-nums;

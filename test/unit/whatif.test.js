@@ -156,6 +156,11 @@ test('rank shift: places moved when ranked by what-if points, ties sharing a ran
   assert.equal(json(model.rankShift(['c', 'd'], (id) => before[id], (id) => before[id])), json({ c: 0, d: 0 }), 'nothing moves until a value changes');
 });
 
+test('places: highest first, ties sharing a place', () => {
+  const v = { a: 10, b: 30, c: 30, d: 5 };
+  assert.equal(JSON.stringify(model.ranks(['a', 'b', 'c', 'd'], (id) => v[id])), JSON.stringify({ a: 3, b: 1, c: 1, d: 4 }));
+});
+
 test('shift tint: green up, red down, deeper with the size of the move', () => {
   assert.equal(model.shiftTint(0, 4), '');
   assert.equal(model.shiftTint(4, 4), 'rgba(52, 168, 83, 0.90)');

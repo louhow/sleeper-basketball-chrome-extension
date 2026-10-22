@@ -92,7 +92,7 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
 // scored as fpts_proj), the stat columns (`statKeys`), headers that toggle the
 // sort, and a position filter. Its list component gets the filtered players,
 // and each row component its player, as React props. Cells show a stat per game, as Sleeper's do.
-const playersTable = (players) => `<!doctype html><title>Sleeper</title>
+const playersTable = (players) => `<!doctype html><meta charset="utf-8"><title>Sleeper</title>
 <style>
   body { margin: 0; background: rgb(16, 33, 49); font-family: Lato, Arial, sans-serif; color: #fff; }
   .integration-players-panel { position: absolute; left: 264px; top: 100px; width: 800px; }
@@ -1293,6 +1293,10 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
   await shown('rebounder', '+2');
   assert.deepEqual(await cells('rebounder'), ['30.0', '70.0', '+2', '10.0', '20.0']);
   assert.deepEqual(await cells('scorer'), ['32.0', '36.0', '−1', '30.0', '2.0']);
+  // Both places show under the badge, to check a shift at a glance.
+  assert.equal(await page.locator('.player-list-item[data-id="rebounder"] .snp-places').textContent(), '#3→#1');
+  assert.equal(await page.locator('.player-list-item[data-id="scorer"] .snp-places').textContent(), '#1→#2');
+  assert.match(await page.locator('.player-list-item[data-id="scorer"] [data-snp-delta]').getAttribute('title'), /Rank by FPTS 1, by adminFPTS 2/);
   const color = await page.locator('.player-list-item[data-id="rebounder"] .cell').nth(1).evaluate((el) => getComputedStyle(el).color);
   assert.equal(color, 'rgb(182, 156, 255)', 'adminFPTS in the what-if color once a value changes');
   // Green up, red down, deeper for the bigger move.

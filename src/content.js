@@ -285,10 +285,14 @@
       const { stats, view, base } = JSON.parse(e.detail);
       const points = Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, s ? scoring.scoreStats(delta, s) : 0]));
       const ids = view.filter((id) => stats[id]?.[base] != null);
-      const shifts = model.rankShift(ids, (id) => stats[id][base], (id) => stats[id][base] + points[id]);
+      const was = model.ranks(ids, (id) => stats[id][base]);
+      const now = model.ranks(ids, (id) => stats[id][base] + points[id]);
+      const shifts = Object.fromEntries(ids.map((id) => [id, was[id] - now[id]]));
       const biggest = Math.max(0, ...Object.values(shifts).map(Math.abs));
       const tints = Object.fromEntries(ids.map((id) => [id, model.shiftTint(shifts[id], biggest)]));
-      document.dispatchEvent(new CustomEvent('snp:admin-scores', { detail: JSON.stringify({ points, shifts, tints }) }));
+      // Both places too, shown under the badge so a shift can be checked at a glance.
+      const places = Object.fromEntries(ids.map((id) => [id, [was[id], now[id]]]));
+      document.dispatchEvent(new CustomEvent('snp:admin-scores', { detail: JSON.stringify({ points, shifts, tints, places }) }));
     }
     document.addEventListener('snp:admin-score-request', adminDeltas);
 
