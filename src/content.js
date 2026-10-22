@@ -107,26 +107,60 @@
     let seasonLoading = false;
     const api = createApi(schedule);
 
-    // Mounts the panel in place of Sleeper's placeholder, or floats it when there's none.
+    // Mounts the panel in place of Sleeper's placeholder, or floats it when
+    // there's none. Sleeper centers the placeholder inside a fixed-height box,
+    // so the box is pinned to a top-aligned column, its other children are
+    // hidden, and the panel gets an explicit height down to the bottom of the
+    // window so its own body scrolls.
+    const BOTTOM_GAP = 16;
     function attach() {
       if (destroyed || disabled) return;
       const placeholder = findPlaceholder();
       if (placeholder) {
         const parent = placeholder.parentElement;
-        if (hidden !== placeholder) {
+        if (hidden?.parent !== parent) {
           restorePlaceholder();
-          hidden = placeholder;
-          hidden.style.display = 'none';
+          hidden = { parent, els: [], css: parent.style.cssText };
+          // Siblings go too, unless one of them is Sleeper's own header or tabs.
+          const chrome_ = 'h1, h2, h3, nav, input, select';
+          hidden.all = ![...parent.children].some((c) => c !== placeholder && c !== host && (c.matches(chrome_) || c.querySelector(chrome_)));
+          parent.style.setProperty('display', 'flex', 'important');
+          parent.style.setProperty('flex-direction', 'column', 'important');
+          parent.style.setProperty('justify-content', 'flex-start', 'important');
+          parent.style.setProperty('align-items', 'stretch', 'important');
+          parent.style.setProperty('overflow', 'hidden', 'important');
         }
-        if (host.parentElement !== parent || host.previousElementSibling !== placeholder) {
+        for (const c of parent.children) {
+          if (c === host || hidden.els.includes(c) || (c !== placeholder && !hidden.all)) continue;
+          hidden.els.push(c);
+          c.style.setProperty('display', 'none', 'important');
+        }
+        if (host.parentElement !== parent) {
           host.classList.remove('floating');
-          placeholder.after(host);
+          parent.append(host);
         }
-        parent.style.minHeight ||= '0';
+        fitHeight();
       } else if (!host.isConnected && Date.now() - mountedAt > FLOAT_AFTER_MS) {
         host.classList.add('floating');
         document.documentElement.appendChild(host);
       }
+    }
+
+    // The panel runs from where it sits to the bottom of the window.
+    function fitHeight() {
+      if (host.classList.contains('floating') || !host.isConnected) return;
+      const top = host.getBoundingClientRect().top;
+      if (!(top >= 0 && top < innerHeight - 200)) return;
+      const height = `${Math.round(innerHeight - top - BOTTOM_GAP)}px`;
+      if (host.style.height !== height) host.style.height = height;
+    }
+
+    function restorePlaceholder() {
+      if (!hidden) return;
+      for (const el of hidden.els) el.style.removeProperty('display');
+      hidden.parent.style.cssText = hidden.css;
+      hidden = null;
+      host.style.height = '';
     }
 
     // Sleeper's "not supported on web yet" block: by class when it has the one
@@ -157,11 +191,6 @@
         el = parent;
       }
       return el;
-    }
-
-    function restorePlaceholder() {
-      if (hidden) hidden.style.display = '';
-      hidden = null;
     }
 
     function schedule() {
@@ -978,6 +1007,7 @@
 
   new MutationObserver(sync).observe(document, { childList: true, subtree: true });
   addEventListener('popstate', sync);
+  addEventListener('resize', sync);
   setInterval(sync, 500);
   sync();
 })();
