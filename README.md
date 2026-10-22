@@ -2,7 +2,7 @@
 
 Chrome extension (MV3) that fills Sleeper's empty NBA Team and Matchup tabs (`sleeper.com/leagues/<id>/team` and `/matchup`) with the layouts from the mobile app.
 It also turns on waiver bids and free-agent adds, which Sleeper's website blocks for NBA.
-A Scoring control in the corner tries other scoring settings on those tabs and the player card, without changing the league.
+A Scoring control in the corner tries other scoring settings on those tabs, the player card and an adminFPTS column on the Players tab, without changing the league.
 On NFL leagues it adds one button to your Team tab: Optimize lineup, which proposes the best starters and saves them once you confirm.
 It also logs every API call it makes, with status, timing, size and a JSON preview, to support probing the API.
 

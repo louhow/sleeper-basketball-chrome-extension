@@ -87,6 +87,48 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
   }
 </script>`;
 
+// Sleeper's NBA Players table (inspected 2026-10-22), reduced to its stateful
+// component: per-player stats keyed by stat (`playerStatsMap`, with FPTS already
+// scored as fpts_proj), the stat columns (`statKeys`), and headers that toggle
+// the sort. Cells show a stat per game, as Sleeper's do.
+const playersTable = (stats) => `<!doctype html><title>Sleeper</title>
+<style>
+  body { margin: 0; background: rgb(16, 33, 49); font-family: Lato, Arial, sans-serif; color: #fff; }
+  .integration-players-panel { position: absolute; left: 264px; top: 100px; width: 800px; }
+  .stat-key-header, .player-list-item { display: flex; gap: 8px; padding: 10px 24px; }
+  .stat-key-header { padding-left: 184px; }
+  .label, .cell { width: 64px; text-align: center; cursor: pointer; }
+  .name { width: 160px; }
+</style>
+<div class="integration-players-panel"><div class="player-table"><div class="table-header"><div class="stat-key-header nba"></div></div><div class="players-list"></div></div></div>
+<script>
+  const LABELS = { fpts_proj: 'FPTS', sp: 'MIN', pts: 'PTS', reb: 'REB' };
+  const panel = {
+    props: { leagueId: '${LEAGUE}', sport: 'nba', scoringSettings: { pts: 1, reb: 1 } },
+    state: { playerStatsMap: ${JSON.stringify(stats)}, statKeys: ['fpts_proj', 'pts', 'reb'], statType: 'proj', sort: 'fpts_proj' },
+    setState(update) {
+      this.state = { ...this.state, ...(typeof update === 'function' ? update(this.state) : update) };
+      render();
+      this.componentDidUpdate?.();
+    },
+  };
+  function render() {
+    const { playerStatsMap: map, statKeys, sort } = panel.state;
+    document.querySelector('.stat-key-header').innerHTML = statKeys.map((k) => '<div class="label nba" data-key="' + k + '"><span>' + (LABELS[k] || k) + '</span></div>').join('');
+    const ids = Object.keys(map);
+    if (sort) ids.sort((a, b) => (map[b][sort] || -1) - (map[a][sort] || -1));
+    document.querySelector('.players-list').innerHTML = ids.map((id) => '<div class="player-list-item" data-id="' + id + '"><div class="name">' + id + '</div>' +
+      statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
+  }
+  document.querySelector('.stat-key-header').addEventListener('click', (e) => {
+    const key = e.target.closest('.label')?.dataset.key;
+    if (key) panel.setState({ sort: panel.state.sort === key ? '' : key });
+  });
+  render();
+  // React 16 internals: the panel div's fiber returns to the component's.
+  document.querySelector('.integration-players-panel').__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: panel.props, stateNode: panel } };
+</script>`;
+
 // Sleeper's left sidebar, reduced to its league links: the item component's props
 // (league, selectLeague) and the router's sit a few fibers up from the link, and
 // Sleeper's own handler sends every league to /leagues/<id>.
@@ -1177,6 +1219,44 @@ test('what-if scoring: try other values from the corner on the Team, Matchup and
   await page.locator(corner('.wi-pop')).waitFor({ state: 'detached' });
   assert.equal(await page.locator(corner('[data-wi="whatif"]')).isDisabled(), true);
   sleeper.midWeek = false;
+  documentBody = LOGGED_OUT;
+});
+
+test('what-if scoring: the Players tab gets a sortable adminFPTS column beside FPTS', async () => {
+  documentBody = playersTable({
+    scorer: { fpts_proj: 32, pts: 30, reb: 2, gp: 1 },
+    rebounder: { fpts_proj: 30, pts: 10, reb: 20, gp: 1 },
+  });
+  await page.goto(PLAYERS_URL);
+  const labels = () => page.locator('.stat-key-header .label').allTextContents();
+  const order = () => page.locator('.player-list-item').evaluateAll((rows) => rows.map((r) => r.dataset.id));
+  const cells = (id) => page.locator(`.player-list-item[data-id="${id}"] .cell`).allTextContents();
+  await page.waitForFunction(() => [...document.querySelectorAll('.stat-key-header .label')].some((l) => l.textContent === 'adminFPTS'), null, { timeout: 30000 });
+  assert.deepEqual(await labels(), ['FPTS', 'adminFPTS', 'PTS', 'REB'], 'right after FPTS');
+  assert.deepEqual(await cells('rebounder'), ['30.0', '30.0', '10.0', '20.0'], 'matches FPTS until a value changes');
+
+  // The Scoring control is here too; changing a value rescores the column (and only it).
+  await page.locator(corner('[data-wi="toggle-open"]')).click();
+  const reb = page.locator(corner('input[data-wi-key="reb"]'));
+  await reb.fill(String((await reb.inputValue()) * 1 + 2));
+  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="rebounder"] .cell:nth-child(3)')?.textContent === '70.0');
+  assert.deepEqual(await cells('scorer'), ['32.0', '36.0', '30.0', '2.0']);
+  const color = await page.locator('.player-list-item[data-id="rebounder"] .cell').nth(1).evaluate((el) => getComputedStyle(el).color);
+  assert.equal(color, 'rgb(182, 156, 255)', 'the what-if color once a value changes');
+  await page.keyboard.press('Escape');
+
+  // Both columns sort from their headers.
+  assert.deepEqual(await order(), ['scorer', 'rebounder'], 'sorted by FPTS');
+  await page.locator('.stat-key-header .label', { hasText: 'adminFPTS' }).click();
+  assert.deepEqual(await order(), ['rebounder', 'scorer'], 'sorted by adminFPTS');
+  await page.screenshot({ path: `${OUT}whatif-players.png` });
+  await page.locator('.stat-key-header .label', { hasText: /^FPTS$/ }).click();
+  assert.deepEqual(await order(), ['scorer', 'rebounder']);
+
+  // Reset brings the column back to FPTS.
+  await page.locator(corner('[data-wi="toggle-open"]')).click();
+  await page.locator(corner('[data-wi="reset"]')).click();
+  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="rebounder"] .cell:nth-child(3)')?.textContent === '30.0');
   documentBody = LOGGED_OUT;
 });
 

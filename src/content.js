@@ -186,10 +186,10 @@
     }
 
     // The what-if scoring control, wherever the extension shows fantasy points:
-    // the Team and Matchup tabs and its dialogs. It's patched in place, so a
-    // field being typed in keeps its focus, caret and text.
+    // the Team and Matchup tabs, its dialogs, and the Players tab's adminFPTS
+    // column. It's patched in place, so a field being typed in keeps its focus, caret and text.
     function renderCorner() {
-      if (!(state.ready && !state.error && (state.onPanel || state.modal))) {
+      if (!(state.ready && !state.error && (state.onPanel || state.modal || lastPage === 'players'))) {
         state.whatIf.open = false;
         return corner.remove();
       }
@@ -230,8 +230,27 @@
       w.overrides = scoring.changedOnly(state.league?.scoring_settings || {}, w.overrides);
       chrome.storage.local.set({ [`whatif:${leagueId}`]: { overrides: w.overrides, on: w.on } });
       rescore();
+      sendAdminScoring();
       schedule();
     }
+
+    // The Players tab's adminFPTS column (page-hook.js) always shows the what-if
+    // values, switched on or not. Each change is announced; page-hook then asks
+    // for each player's difference from the league's scoring (adminDeltas).
+    function sendAdminScoring() {
+      document.dispatchEvent(new CustomEvent('snp:admin-scoring', {
+        detail: JSON.stringify({ leagueId, changed: Object.keys(state.whatIf.overrides).length > 0 }),
+      }));
+    }
+    function adminDeltas(e) {
+      const league = state.league?.scoring_settings || {};
+      // Scoring with just the differences gives what they add on top of Sleeper's FPTS.
+      const delta = Object.fromEntries(Object.entries(state.whatIf.overrides).map(([key, value]) => [key, value - (league[key] ?? 0)]));
+      const { stats } = JSON.parse(e.detail);
+      const out = Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, s ? scoring.scoreStats(delta, s) : 0]));
+      document.dispatchEvent(new CustomEvent('snp:admin-scores', { detail: JSON.stringify(out) }));
+    }
+    document.addEventListener('snp:admin-score-request', adminDeltas);
 
     // Every loaded week's fantasy points, with whichever scoring is in use.
     function rescore() {
@@ -330,6 +349,7 @@
       await loadWeek(state.week);
       if (state.currentWeek !== state.week) loadWeek(state.currentWeek).catch(fail);
       state.ready = true;
+      sendAdminScoring();
       schedule();
       loadClaims();
       if (pendingCard) openCard(pendingCard);
@@ -1035,6 +1055,7 @@
 
     // Same league, other tab (Team <-> Matchup): keep the data, swap the view.
     function show(next) {
+      if (next !== lastPage) schedule(); // the Scoring control follows the tab
       lastPage = next;
       nflSession?.show(next);
       const onPanel = PANEL_PAGES.has(next);
@@ -1051,6 +1072,7 @@
       clearInterval(clock);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('click', onOutsideClick, true);
+      document.removeEventListener('snp:admin-score-request', adminDeltas);
       document.removeEventListener('snp:player-action', onPlayerAction);
       document.removeEventListener('snp:player-card', onPlayerCard);
       if (document.documentElement.dataset.snpNbaLeague === leagueId) delete document.documentElement.dataset.snpNbaLeague;

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sleeper NBA",
   "version": "1.0.0",
-  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes. On NFL Team tabs, adds Optimize lineup.",
+  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes. Try other scoring from a corner control, with an adminFPTS column on the Players tab. On NFL Team tabs, adds Optimize lineup.",
   "permissions": [
     "storage"
   ],

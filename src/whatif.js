@@ -46,7 +46,7 @@
       <header class="wi-head">
         <div>
           <h2>What-if scoring</h2>
-          <p>Try other values on your Team, Matchup and player cards. Your league's scoring doesn't change.</p>
+          <p>Try other values on your Team, Matchup and player cards, and in the Players tab's adminFPTS column. Your league's scoring doesn't change.</p>
         </div>
         <button class="icon close" data-wi="close" aria-label="Close">✕</button>
       </header>

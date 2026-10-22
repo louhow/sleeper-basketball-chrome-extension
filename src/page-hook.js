@@ -5,7 +5,8 @@
 // player id (and Sleeper's own waiver status) come from React props, which
 // only this world can read, and go to the extension as JSON in a DOM event.
 // It also keeps the Matchup tab when switching to an NBA league from the sidebar,
-// and for NFL leagues reads (and saves) the Team tab's lineup for Optimize lineup.
+// adds the adminFPTS column to the Players tab, and for NFL leagues reads (and
+// saves) the Team tab's lineup for Optimize lineup.
 (() => {
   const ACTION = '.player-action-button.waiver, .player-action-button.add';
   // Player name and headshot on the Players tab, and a row on the Trend tab.
@@ -65,6 +66,83 @@
     item.closeNavbar?.();
     nav.router.push(`/leagues/${id}/matchup`);
   }, true);
+
+  // NBA Players tab: an adminFPTS column beside Sleeper's FPTS, scored with the
+  // what-if values from the extension's Scoring control. It goes into Sleeper's
+  // own table component (its stat keys and per-player stats map), so Sleeper
+  // renders it, and its header sorts it like any other column.
+  const ADMIN_KEY = 'adminFPTS';
+  const PLAYERS_PANEL = '.integration-players-panel';
+  // { leagueId, changed } from the extension; it does the scoring itself.
+  let admin = null;
+  let adminVersion = 0;
+
+  document.addEventListener('snp:admin-scoring', (e) => {
+    admin = JSON.parse(e.detail);
+    adminVersion++;
+    patchPlayers();
+  });
+
+  // What the changed settings add to (or take from) each player's stats, from
+  // the extension, which answers before dispatchEvent returns.
+  function adminDeltas(stats) {
+    let deltas = {};
+    const take = (e) => {
+      deltas = JSON.parse(e.detail);
+    };
+    document.addEventListener('snp:admin-scores', take);
+    send('snp:admin-score-request', { stats });
+    document.removeEventListener('snp:admin-scores', take);
+    return deltas;
+  }
+
+  // adminFPTS = Sleeper's FPTS plus what the changed settings add or take away,
+  // so it matches FPTS exactly until a value changes.
+  function patchPlayers() {
+    const league = document.documentElement.dataset.snpNbaLeague;
+    const el = document.querySelector(PLAYERS_PANEL);
+    const panel = el && fiber(el, (x) => x.scoringSettings && x.sport === 'nba' && 'leagueId' in x)?.stateNode;
+    const ours = Boolean(panel?.state && admin && league && admin.leagueId === league && String(panel.props.leagueId) === league);
+    document.documentElement.toggleAttribute('data-snp-admin-changed', ours && admin.changed);
+    if (!ours) return;
+    if (!panel.snpHooked) {
+      // Sleeper replaces its stats map on every week, season or Projection/Stats switch; patch right after.
+      const didUpdate = panel.componentDidUpdate;
+      panel.componentDidUpdate = function (...args) {
+        didUpdate?.apply(this, args);
+        patchPlayers();
+      };
+      panel.snpHooked = true;
+    }
+    const { playerStatsMap: map, statKeys = [], statType } = panel.state;
+    const base = statType === 'stat' ? 'fpts' : 'fpts_proj';
+    const other = base === 'fpts' ? 'fpts_proj' : 'fpts';
+    const update = {};
+    if (map && (panel.snpMap !== map || panel.snpVersion !== adminVersion)) {
+      const deltas = admin.changed ? adminDeltas(map) : {};
+      // New objects per player, so Sleeper's rows see the change and re-render.
+      update.playerStatsMap = Object.fromEntries(Object.entries(map).map(([id, stats]) => [id, stats?.[base] == null ? stats
+        : { ...stats, [ADMIN_KEY]: stats[base] + (deltas[id] ?? 0) }]));
+      panel.snpVersion = adminVersion;
+    }
+    // Right after FPTS, once Sleeper has settled which FPTS it shows.
+    if (statKeys[0] === base && !statKeys.includes(other) && !statKeys.includes(ADMIN_KEY)) {
+      update.statKeys = [base, ADMIN_KEY, ...statKeys.slice(1)];
+    }
+    if (!Object.keys(update).length) return;
+    if (update.playerStatsMap) panel.snpMap = update.playerStatsMap;
+    panel.setState(update);
+  }
+  setInterval(() => {
+    if (document.documentElement.dataset.snpNbaLeague && document.querySelector(PLAYERS_PANEL)) patchPlayers();
+  }, 500);
+
+  // The column wears the what-if color once a value differs from the league's.
+  const adminStyle = document.createElement('style');
+  adminStyle.textContent = `
+    html[data-snp-admin-changed] ${PLAYERS_PANEL} .stat-key-header > :nth-child(2 of .label) span,
+    html[data-snp-admin-changed] ${PLAYERS_PANEL} .player-list-item > :nth-child(2 of .cell) { color: #b69cff !important; }`;
+  (document.head || document.documentElement).append(adminStyle);
 
   // NFL Team tab. Sleeper's own Team component holds the lineup as shown
   // (state.starters: slot + player), the roster, players, which teams have

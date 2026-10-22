@@ -64,7 +64,7 @@ Clicking a player's name or headshot on the Team or Matchup tab, or a player on 
 
 ### What-if scoring
 
-A **Scoring** control sits in the page's top-right corner on the Team and Matchup tabs and over the extension's dialogs, to try other scoring settings without touching the league.
+A **Scoring** control sits in the page's top-right corner on the Team, Matchup and Players tabs and over the extension's dialogs, to try other scoring settings without touching the league.
 
 - Open it to edit any value: the league's scored stats first, in Sleeper's order and wording, then the rest behind "Show more". Changed rows show the league's value, and clicking it puts that one back.
 - Values apply as they're typed, and the page switches to what-if scoring.
@@ -78,6 +78,12 @@ While what-if is on, it's hard to miss:
 - Every fantasy number it changes (day cells, weekly points, team totals, Matchup rows, the card's projections) turns purple, and dialogs get a purple frame.
 - Sleeper's own totals (`points`, `proj_points`, `players_points`) are scored with the league's settings, so they're set aside and added up from Lock-In rules instead.
 - Lock-In and Optimize lineup are off, since they act on real points: a lock is final, and Optimize picks with the league's scoring.
+
+On the Players tab, an **adminFPTS** column sits right after Sleeper's FPTS (league scoring) and always uses the what-if values, switched on or not.
+It matches FPTS until a value changes, then turns purple.
+Click either header to sort by it, as with Sleeper's other columns.
+How it hooks in: `src/page-hook.js` adds `adminFPTS` to the stat keys and per-player stats of Sleeper's own table component, so Sleeper renders and sorts it.
+The value is Sleeper's FPTS plus the changed settings scored on their own (`snp:admin-score-request`, answered by the extension), so it never drifts from Sleeper's number.
 
 ### NFL: Optimize lineup
 
