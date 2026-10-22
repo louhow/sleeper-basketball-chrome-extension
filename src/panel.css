@@ -81,18 +81,18 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 button.icon { min-width: 32px; padding: 6px 0; }
 button.link { background: none; padding: 0; color: var(--accent); font-size: 12px; text-decoration: underline; }
 button.link:hover { background: none !important; }
-button.name { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; font-weight: inherit; text-align: left; }
-button.name:hover { background: none !important; text-decoration: underline; }
+button.name { background: none; padding: 0; border: 0; border-radius: 0; color: inherit; font: inherit; line-height: inherit; text-align: left; cursor: pointer; }
+button.name:hover, button.name:focus-visible { background: none !important; text-decoration: underline; text-underline-offset: 2px; outline: none; }
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 20px 10px;
+  padding: 14px 24px 0;
   border-bottom: 1px solid var(--line);
 }
-.tabs, .tools { display: flex; align-items: center; gap: 4px; }
+.tabs, .tools { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; }
 .tabs button {
   background: transparent;
   color: var(--muted);
@@ -100,9 +100,10 @@ button.name:hover { background: none !important; text-decoration: underline; }
   font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 8px 10px;
+  padding: 8px 10px 12px;
   border-radius: 0;
   border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
 }
 .tabs button.active { color: var(--text); border-bottom-color: var(--accent); background: transparent !important; }
 .tabs button.api-tab { text-transform: none; letter-spacing: 0; font-weight: 700; }
@@ -124,8 +125,10 @@ button.name:hover { background: none !important; text-decoration: underline; }
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px 20px 24px;
+  padding: 16px 24px 28px;
   container-type: inline-size;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 .msg { margin: 32px 0; color: var(--muted); text-align: center; }
 .msg.error, pre.error { color: var(--danger); }
@@ -211,7 +214,7 @@ button.optimize:hover:not(:disabled) { background: rgba(0, 206, 184, 0.24); }
 .rcols .rc-pts { text-align: right; }
 .card {
   margin-bottom: 4px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
@@ -311,7 +314,7 @@ button.slot:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(255,
 .notice.error { background: #3d1820; border: 1px solid rgba(255, 91, 110, 0.5); color: var(--danger); }
 
 /* Match tab */
-.mu-head { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.mu-head { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
 .mu-head .vs {
   position: absolute;
   top: 50%;
@@ -363,10 +366,10 @@ button.slot:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(255,
 .mu-meta b { background: none !important; font-weight: 900; }
 .mu-team.theirs .mu-meta { flex-direction: row-reverse; }
 .mu-list .mu-head { margin-bottom: 10px; }
-.mu-starters { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
+.mu-starters { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
 .mu-starters h3, h3.mu-title { margin: 0; font-size: 14px; }
 h3.mu-title { margin: 14px 0 6px; }
-.mu-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: 6px; align-items: center; margin-bottom: 3px; }
+.mu-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 4px; }
 .mu-row > .slot { width: 48px; height: 30px; border-radius: 8px; }
 .mp {
   display: grid;
@@ -388,6 +391,7 @@ h3.mu-title { margin: 14px 0 6px; }
 .mp.empty .name { color: var(--muted); }
 .mp-id { grid-area: id; min-width: 0; }
 .mp-id .name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-id .name button.name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
 .mp-id .sub { display: flex; align-items: center; gap: 4px; font-size: 11px; white-space: nowrap; overflow: hidden; }
 .mp.theirs .mp-id .sub { justify-content: flex-end; }
 .mp-id .who { display: inline-flex; gap: 3px; align-items: baseline; }
@@ -455,7 +459,7 @@ th.num, td.num { text-align: right; }
 .plist-head { padding: 0 10px 4px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .plist-head span:first-child { grid-column: 1 / 3; }
 .plist-head .num, .prow .num { text-align: right; font-variant-numeric: tabular-nums; }
-.prow { margin-bottom: 3px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.prow { margin-bottom: 4px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
 .owner { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .owner.mine { color: var(--accent); }
 .owner.fa { color: #7bd88f; }

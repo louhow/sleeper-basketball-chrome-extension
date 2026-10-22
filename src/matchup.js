@@ -95,7 +95,7 @@
     return `<div class="mp ${cls}${st.live ? ' live' : ''}">
       <img class="headshot" src="${headshot(id)}" alt="" data-player="${esc(id)}">
       <div class="mp-id">
-        <div class="name"><button data-player="${esc(id)}">${esc(shortName(p))}</button>${injuryTag(p)}</div>
+        <div class="name"><button class="name" data-player="${esc(id)}">${esc(shortName(p))}</button>${injuryTag(p)}</div>
         <div class="sub">${cls === 'theirs' ? `${chips}${who}` : `${who}${chips}`}</div>
       </div>
       <div class="mp-game"><b>${esc(opp)}</b><span class="sub">${esc(when)}</span></div>
