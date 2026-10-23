@@ -1,4 +1,4 @@
-# Sleeper Extension
+# Sleeper Chrome Extension
 
 Chrome extension (MV3) that fills in what Sleeper's website leaves out, across sports.
 Unofficial and not affiliated with Sleeper.
@@ -38,7 +38,7 @@ The only things it stores are cached copies of Sleeper's public player lists and
 
 ## Install
 
-1. Clone the repo: `git clone https://github.com/louhow/sleeper-basketball-extension.git`
+1. Clone the repo: `git clone https://github.com/louhow/sleeper-chrome-extension.git`
 2. Open `chrome://extensions` and turn on Developer mode.
 3. Click "Load unpacked" and pick the cloned directory.
 4. Visit your league on `https://sleeper.com` while logged in (for NBA, the `/team` or `/matchup` tab).

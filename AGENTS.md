@@ -5,7 +5,7 @@ User-facing docs: `README.md` (feature list, install, privacy), `docs/DETAILS.md
 
 ## Workflow
 
-- Commit and push to `main` after each finished, tested change (remote: `github.com/louhow/sleeper-basketball-extension`, public).
+- Commit and push to `main` after each finished, tested change (remote: `github.com/louhow/sleeper-chrome-extension`, public).
 - Never add Claude as author or co-author on commits.
 - Keep the README's Features list in sync: any change that adds, removes or renames a user-visible feature updates that list (one short line per feature) in the same commit, along with the matching section of `docs/DETAILS.md` or `docs/EPL.md`.
 - Before committing, run `npm test` (unit) and `npm run test:e2e` (headless Chromium); both must pass with no page errors.
