@@ -92,7 +92,8 @@ const playersTab = (rows) => `<!doctype html><title>Sleeper</title>
 // scored as fpts_proj), the stat columns (`statKeys`), headers that toggle the
 // sort, and a position filter. Its list component gets the filtered players,
 // and each row component its player, as React props. Cells show a stat per game, as Sleeper's do.
-const playersTable = (players) => `<!doctype html><meta charset="utf-8"><title>Sleeper</title>
+// `state` overrides the table's state, e.g. Stats for a week: { statType: 'stat', statInterval: 1 }.
+const playersTable = (players, state = {}) => `<!doctype html><meta charset="utf-8"><title>Sleeper</title>
 <style>
   body { margin: 0; background: rgb(16, 33, 49); font-family: Lato, Arial, sans-serif; color: #fff; }
   .integration-players-panel { position: absolute; left: 264px; top: 100px; width: 800px; }
@@ -108,11 +109,15 @@ const playersTable = (players) => `<!doctype html><meta charset="utf-8"><title>S
   .label span { text-transform: uppercase; }
   .name { width: 160px; }
   .filters button { margin: 0 4px 8px 24px; }
+  /* Sleeper's header is 42px, its labels the bottom 25px. */
+  .table-header { height: 42px; padding-top: 16px; box-sizing: border-box; }
 </style>
 <div class="integration-players-panel"><div class="filters"><button data-pos="ALL">ALL</button><button data-pos="PG">PG</button></div>
   <div class="player-table"><div class="table-header"><div class="stat-key-header nba"></div></div><div class="ReactVirtualized__Grid"></div></div></div>
 <script>
-  const LABELS = { fpts_proj: 'FPTS', sp: 'MIN', pts: 'PTS', tpm: '3PM', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO' };
+  // Keys Sleeper has no label for print capitalized (and show uppercase).
+  const LABELS = { fpts_proj: 'FPTS', fpts: 'FPTS', sp: 'MIN', pts: 'PTS', tpm: '3PM', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO',
+    fgm: 'Fgm', fga: 'Fga', tpa: '3pa', ftm: 'Ftm', fta: 'Fta' };
   const PLAYERS = ${JSON.stringify(players)};
   // Rostered players show their owner under the name, which makes the name area wider.
   const OWNERS = Object.fromEntries(PLAYERS.filter((p) => p.owner).map((p) => [p.id, p.owner]));
@@ -123,6 +128,8 @@ const playersTable = (players) => `<!doctype html><meta charset="utf-8"><title>S
       playerStatsMap: Object.fromEntries(PLAYERS.map((p) => [p.id, p.stats])),
       // Sleeper's NBA projection columns; the ones a test doesn't set print "-".
       statKeys: ['fpts_proj', 'sp', 'pts', 'tpm', 'reb', 'ast', 'stl', 'blk', 'to'], statType: 'proj', sort: 'fpts_proj', positionFilter: 'ALL',
+      season: '2026', statInterval: 'season',
+      ...${JSON.stringify(state)},
     },
     setState(update) {
       this.state = { ...this.state, ...(typeof update === 'function' ? update(this.state) : update) };
@@ -138,7 +145,7 @@ const playersTable = (players) => `<!doctype html><meta charset="utf-8"><title>S
     const grid = document.querySelector('.ReactVirtualized__Grid');
     grid.__reactInternalInstance$test = fiberOf({ players: view, playerStatsMap: map }, 3);
     grid.innerHTML = view.map(({ player_id: id }) => '<div class="player-list-item" data-id="' + id + '"><div class="owner-cell"></div><div class="player-meta-container">' + id + (OWNERS[id] ? ' → ' + OWNERS[id] : '') + '</div>' +
-      statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
+      statKeys.map((k) => '<div class="cell nba">' + (map[id][k] == null ? '-' : (map[id][k] / (k === 'sp' ? 60 : 1) / (map[id].gp || 1)).toFixed(1)) + '</div>').join('') + '</div>').join('');
     for (const row of grid.children) row.__reactInternalInstance$test = { memoizedProps: {}, return: { memoizedProps: { player: { player_id: row.dataset.id } } } };
   }
   document.querySelector('.stat-key-header').addEventListener('click', (e) => {
@@ -273,6 +280,8 @@ const sleeper = {
   beforeTipoff: false,
   // When set, rewrites the weekly projection rows (and so mid-week stats, which stand in from them).
   projections: null,
+  // When set, the weekly per-game stat rows, as-is.
+  weekStats: null,
   // When set, Sleeper turns down the session: every logged-in call gets a 401.
   rejectSession: false,
 };
@@ -448,6 +457,7 @@ before(async () => {
   await context.route('https://api.sleeper.app/stats/nba/**', async (route) => {
     // Only the weekly stats are doctored; the player card's own stats go through.
     if (!/\/stats\/nba\/\d+\/\d+/.test(route.request().url())) return route.fallback();
+    if (sleeper.weekStats) return route.fulfill({ json: sleeper.weekStats });
     if (sleeper.beforeTipoff) return route.fulfill({ json: [] });
     if (!sleeper.midWeek) return route.continue();
     const url = route.request().url().replace('/stats/', '/projections/');
@@ -1067,16 +1077,20 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   const victim = leg.starters[util];
   // Stat points that score exactly `fpts` fantasy points under the league's scoring.
   const statPts = (fpts) => fpts / league.scoring_settings.pts;
-  // A bench player with games left after their first (finished) one becomes a must-start.
+  // A bench player with a game on the next day of games (what Optimize picks for),
+  // after their first (finished) one, becomes a must-start.
   const { data } = await (await fetch('https://sleeper.com/graphql', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query: 'query scores { scores(sport: "nba", season_type: "regular", season: "2026", week: 1) { game_id metadata } }' }),
+    body: JSON.stringify({ query: 'query scores { scores(sport: "nba", season_type: "regular", season: "2026", week: 1) { game_id date start_time status metadata } }' }),
   })).json();
-  const gamesOf = (team) => data.scores.filter((g) => [g.metadata?.home_team?.team, g.metadata?.away_team?.team].includes(team)).length;
   const players = await (await fetch('https://api.sleeper.app/v1/players/nba')).json();
+  const ahead = (team) => data.scores.filter((g) => [g.metadata?.home_team?.team, g.metadata?.away_team?.team].includes(team) &&
+    !sleeper.finished.has(g.game_id) && g.status === 'pre_game' && g.start_time > Date.now() + 3600e3);
+  const nextDay = myRoster.players.flatMap((id) => ahead(players[id]?.team).map((g) => g.date)).sort()[0];
   const placed = new Set([...leg.starters, ...(myRoster.taxi || []), ...(myRoster.reserve || [])]);
-  const bench = myRoster.players.filter((id) => !placed.has(id) && gamesOf(players[id].team) >= 2);
+  const bench = myRoster.players.filter((id) => !placed.has(id) && ahead(players[id].team).some((g) => g.date === nextDay));
+  assert.ok(bench.length, `a bench player plays on ${nextDay}`);
   const star = bench[0];
   // The UTIL starter scored a little in their finished game and is projected nothing after it.
   sleeper.projections = (rows) => rows.map((r) => {
@@ -1385,6 +1399,75 @@ test('what-if scoring: the Players tab gets sortable adminFPTS and adminDelta co
 });
 
 const nflDialog = (sel = '') => `#sleeper-nfl-dialog ${sel}`;
+test('players tab in Stats: dimmed shot-volume columns, and a week\'s best or worst game', async () => {
+  sleeper.weekStats = [
+    { player_id: 'shooter', game_id: 'g1', stats: { sp: 2000, pts: 30, fgm: 12, fga: 20, tpa: 6, ftm: 4, fta: 5 } },
+    { player_id: 'shooter', game_id: 'g2', stats: { sp: 1500, pts: 6, fgm: 3, fga: 14, tpa: 2 } },
+    // A game sat out comes back with no stats, and is nobody's worst.
+    { player_id: 'shooter', game_id: 'g3', stats: {} },
+    { player_id: 'steady', game_id: 'g4', stats: { sp: 1800, pts: 20, fgm: 8, fga: 15, tpa: 1, ftm: 4, fta: 4 } },
+  ];
+  const STAT_KEYS = ['fpts', 'sp', 'pts', 'tpm', 'reb', 'ast', 'stl', 'blk', 'to'];
+  documentBody = playersTable([
+    // The week's totals over two games, which Sleeper shows per game.
+    { id: 'shooter', pos: 'SG', stats: { fpts: 36, sp: 3500, pts: 36, fgm: 15, fga: 34, tpa: 8, ftm: 4, fta: 5, gp: 2 } },
+    { id: 'steady', pos: 'C', stats: { fpts: 20, sp: 1800, pts: 20, fgm: 8, fga: 15, tpa: 1, ftm: 4, fta: 4, gp: 1 } },
+  ], { statType: 'stat', statInterval: 1, statKeys: STAT_KEYS, sort: 'fpts' });
+  await page.goto(PLAYERS_URL);
+  const labels = () => page.locator('.stat-key-header .label').allTextContents();
+  const cell = (id, key) => page.evaluate(([i, k]) => {
+    const n = panel.state.statKeys.indexOf(k);
+    return document.querySelectorAll(`.player-list-item[data-id="${i}"] .cell`)[n]?.textContent;
+  }, [id, key]);
+  await page.waitForFunction(() => panel.state.statKeys.includes('fta'), null, { timeout: 30000 });
+  assert.deepEqual(await labels(), ['FPTS', 'MIN', 'PTS', 'Fgm', 'Fga', '3PM', '3pa', 'REB', 'AST', 'STL', 'BLK', 'TO', 'Ftm', 'Fta']);
+  assert.deepEqual([await cell('shooter', 'pts'), await cell('shooter', 'fga'), await cell('shooter', 'fta')], ['18.0', '17.0', '2.5'], 'the week average, as Sleeper shows it');
+  // They don't score, so they're dimmed; Sleeper's own columns aren't.
+  const opacity = (sel) => page.locator(sel).evaluate((el) => getComputedStyle(el).opacity);
+  assert.equal(await opacity('.stat-key-header .label[data-key="fga"]'), '0.5');
+  assert.equal(await opacity('.player-list-item[data-id="shooter"] .cell:nth-child(7 of .cell)'), '0.5', 'FGA');
+  assert.equal(await opacity('.player-list-item[data-id="shooter"] .cell:nth-child(3 of .cell)'), '1', 'PTS');
+  // All 14 columns fit Sleeper's 796px row, each value under its header.
+  const layout = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('.stat-key-header .label')].map((l) => l.getBoundingClientRect());
+    return [...document.querySelectorAll('.player-list-item')].map((row) => {
+      const cells = [...row.querySelectorAll('.cell')].map((c) => c.getBoundingClientRect());
+      return { offsets: [...new Set(labels.map((l, i) => Math.round(cells[i].x - l.x)))], overflow: Math.round(cells.at(-1).right - row.getBoundingClientRect().right) };
+    });
+  });
+  for (const row of layout) {
+    assert.equal(row.offsets.length, 1, 'columns line up');
+    assert.ok(row.overflow <= 0, `the last column fits (${row.overflow}px over)`);
+  }
+
+  // The week's switch sits in the table's corner; Best and Worst swap in a single game.
+  const pick = page.locator('.table-header .snp-week-pick');
+  assert.deepEqual(await pick.locator('button').allTextContents(), ['Avg', 'Best', 'Worst']);
+  assert.equal(await pick.locator('[aria-checked="true"]').textContent(), 'Avg');
+  await page.screenshot({ path: `${OUT}players-stats-week.png` });
+  await pick.locator('button', { hasText: 'Best' }).click();
+  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="shooter"] .cell:nth-child(3 of .cell)')?.textContent === '30.0');
+  assert.deepEqual([await cell('shooter', 'fga'), await cell('shooter', 'fta'), await cell('steady', 'pts')], ['20.0', '5.0', '20.0']);
+  assert.equal(await pick.locator('[aria-checked="true"]').textContent(), 'Best');
+  await page.screenshot({ path: `${OUT}players-stats-best.png` });
+  await pick.locator('button', { hasText: 'Worst' }).click();
+  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="shooter"] .cell:nth-child(3 of .cell)')?.textContent === '6.0');
+  assert.deepEqual([await cell('shooter', 'fga'), await cell('shooter', 'fta')], ['14.0', '-'], 'no free throws that game');
+  await pick.locator('button', { hasText: 'Avg' }).click();
+  await page.waitForFunction(() => document.querySelector('.player-list-item[data-id="shooter"] .cell:nth-child(3 of .cell)')?.textContent === '18.0');
+
+  // The whole season has no switch, and Projection has no volume columns.
+  await page.locator('.table-header .snp-week-pick button', { hasText: 'Best' }).click();
+  await page.evaluate(() => panel.setState({ statInterval: 'season' }));
+  await pick.waitFor({ state: 'detached' });
+  assert.equal(await cell('shooter', 'pts'), '18.0', 'back to Sleeper\'s numbers');
+  await page.evaluate(() => panel.setState({ statType: 'proj', statKeys: ['fpts_proj', 'sp', 'pts', 'tpm', 'reb', 'ast', 'stl', 'blk', 'to'], sort: 'fpts_proj' }));
+  await page.waitForFunction(() => !panel.state.statKeys.includes('fga'));
+  assert.deepEqual(await labels(), ['FPTS', 'MIN', 'PTS', '3PM', 'REB', 'AST', 'STL', 'BLK', 'TO']);
+  sleeper.weekStats = null;
+  documentBody = LOGGED_OUT;
+});
+
 test('NFL optimize lineup: an OPTIMIZE button beside WAIVER and TRADE proposes and saves through Sleeper', async () => {
   documentBody = nflTeamTab();
   await page.goto(NFL_TEAM_URL);

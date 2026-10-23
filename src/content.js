@@ -302,6 +302,39 @@
     }
     document.addEventListener('snp:admin-score-request', adminDeltas);
 
+    // The Players tab's Best and Worst (page-hook.js): each player's best or
+    // worst game of a week, by the league's scoring (as Sleeper's FPTS is), from
+    // the week's per-game stats. Answers before dispatchEvent returns: the
+    // picked games, or null while the week loads ('snp:week-games-ready' follows).
+    const weekGames = {}; // `${season}|${week}` -> stat rows, or the load in flight
+    function pickWeekGames(e) {
+      const { season, week, mode } = JSON.parse(e.detail);
+      const key = `${season}|${week}`;
+      if (!weekGames[key]) {
+        const type = season === state.league?.season ? state.league.season_type || 'regular' : 'regular';
+        weekGames[key] = api.get(`/stats/nba/${season}/${week}?season_type=${type}`)
+          .then((rows) => { weekGames[key] = rows || []; })
+          .catch(() => { weekGames[key] = []; })
+          .finally(() => document.dispatchEvent(new CustomEvent('snp:week-games-ready')));
+      }
+      const rows = Array.isArray(weekGames[key]) ? weekGames[key] : null;
+      let games = null;
+      if (rows) {
+        const settings = state.league?.scoring_settings || {};
+        const better = mode === 'worst' ? (a, b) => a < b : (a, b) => a > b;
+        const best = {};
+        for (const { player_id: id, stats } of rows) {
+          // Games a player sat out come back with no stats.
+          if (!(stats?.sp > 0 || stats?.min > 0)) continue;
+          const fpts = scoring.scoreStats(settings, stats);
+          if (!best[id] || better(fpts, best[id].fpts)) best[id] = { ...stats, gp: 1, fpts };
+        }
+        games = best;
+      }
+      document.dispatchEvent(new CustomEvent('snp:week-games', { detail: JSON.stringify(games) }));
+    }
+    document.addEventListener('snp:week-games-request', pickWeekGames);
+
     // Every loaded week's fantasy points, with whichever scoring is in use.
     function rescore() {
       const settings = ui.scoringOf(state);
@@ -1123,6 +1156,7 @@
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('snp:admin-score-request', adminDeltas);
+      document.removeEventListener('snp:week-games-request', pickWeekGames);
       document.removeEventListener('snp:player-action', onPlayerAction);
       document.removeEventListener('snp:player-card', onPlayerCard);
       if (document.documentElement.dataset.snpNbaLeague === leagueId) delete document.documentElement.dataset.snpNbaLeague;

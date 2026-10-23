@@ -56,6 +56,19 @@ Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave
 Win probability is Sleeper's own formula, ported from its web app: each side is a normal distribution centred on its projection, narrowing as the score approaches it.
 Rank comes from `roster_standings`; before any games are played, it falls back to the standings order (record, points, then waiver order), which is what Sleeper shows then.
 
+### Players tab
+
+Sleeper's own NBA Players table, with two additions in Stats (not Projection, where they'd mean nothing):
+
+- Shot volume: FGM and FGA after PTS, 3PA after 3PM, FTM and FTA at the end.
+  They don't score in the league, so they're dimmed.
+  Sleeper's stats already carry them; they go into its table component as stat keys, so they sort from their headers like its own columns.
+- Avg / Best / Worst: with a week picked (not the season), a switch in the table's top-left corner.
+  Avg is Sleeper's own numbers, each player's average over the week's games.
+  Best and Worst show each player's single best or worst game that week, by the league's scoring; games a player sat out don't count.
+  The per-game stats come from `/stats/nba/<season>/<week>`, once per week per page load.
+- The columns narrow to fit Sleeper's 796px row (14 columns at 43px; 16 with the admin pair).
+
 ### Player card
 
 Clicking a player's name or headshot on the Team or Matchup tab, or a player on the Players or Trend tab (instead of Sleeper's own NBA card), opens a card laid out like Sleeper's NFL player card:
@@ -161,7 +174,7 @@ The API log stays available, and once the page holds a new token (after logging 
 | `GET /v1/state/nba` | Current week |
 | `GET /v1/players/nba` | Names, teams, positions, injuries (~2.5 MB, cached 12h in `chrome.storage.local`) |
 | `GET /projections/nba/<season>/<week>` | Per-game projected stats, scored with the league's settings |
-| `GET /stats/nba/<season>/<week>` | Per-game actual stats |
+| `GET /stats/nba/<season>/<week>` | Per-game actual stats (Team and Matchup tabs; the Players tab's Best and Worst) |
 | `GET /players/nba/research/<type>/<season>/<week>?league_type=` | Rostered and start percentages |
 | `GET /players/nba/<id>`, `/stats/nba/player/<id>?season=&grouping=week`, `/projections/nba/player/<id>?...`, `/players/nba/<team>/depth_chart` | Player card: bio, game logs, career, depth chart |
 | `POST sleeper.com/graphql` `get_player_news`, `league_transactions_by_player` | Player card: latest news, transaction history |

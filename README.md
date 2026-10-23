@@ -15,6 +15,7 @@ Chrome extension (MV3) that fills in what Sleeper's website leaves out, across s
 - Matchup tab: both lineups slot by slot, win probability, Lock-In status.
 - Optimize lineup: proposes the best starters for the next day of games and saves once you confirm.
 - Waiver bids and free-agent adds from Sleeper's own W and ADD buttons, plus your pending claims.
+- Players tab in Stats: dimmed shot-volume columns (FGM, FGA, 3PA, FTM, FTA) and a week's Avg / Best / Worst game.
 - Player card: bio, game logs, career, news, transaction history.
 - Admin tools (off unless `?snp-admin=1`): what-if scoring on the Team and Matchup tabs and player card, adminFPTS and adminDelta columns on the Players tab.
 
