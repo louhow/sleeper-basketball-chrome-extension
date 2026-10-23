@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sleeper NBA",
   "version": "1.0.0",
-  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes. Try other scoring from a corner control, with adminFPTS and adminDelta columns on the Players tab. On NFL Team tabs, adds Optimize lineup.",
+  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes. Try other scoring from a corner control, with adminFPTS and adminDelta columns on the Players tab. On NFL Team tabs, adds Optimize lineup. Premier League (EPL) leagues get the app's Match, Team, Players and League tabs.",
   "permissions": [
     "storage"
   ],
@@ -39,12 +39,32 @@
       ],
       "run_at": "document_start",
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://sleeper.com/*"
+      ],
+      "js": [
+        "src/epl/scoring.js",
+        "src/epl/model.js",
+        "src/epl/ui.js",
+        "src/epl/team.js",
+        "src/epl/matchup.js",
+        "src/epl/league.js",
+        "src/epl/players.js",
+        "src/epl/card.js",
+        "src/epl/dialogs.js",
+        "src/epl/view.js",
+        "src/epl/content.js"
+      ],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "src/panel.css"
+        "src/panel.css",
+        "src/epl/panel.css"
       ],
       "matches": [
         "https://sleeper.com/*"

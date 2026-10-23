@@ -1,13 +1,32 @@
-# Sleeper Basketball Chrome Extension
+# Sleeper Basketball Extension
 
-Chrome extension (MV3) that fills Sleeper's empty NBA Team and Matchup tabs (`sleeper.com/leagues/<id>/team` and `/matchup`) with the layouts from the mobile app.
-It also turns on waiver bids and free-agent adds, which Sleeper's website blocks for NBA.
-An admin Scoring control (hidden unless turned on with `?snp-admin=1`) tries other scoring settings on those tabs, the player card (an adminFPTS game-log column) and adminFPTS and adminDelta columns on the Players tab, without changing the league.
-On NFL leagues it adds one button to your Team tab: Optimize lineup, which proposes the best starters and saves them once you confirm.
-It also logs every API call it makes, with status, timing, size and a JSON preview, to support probing the API.
-
+Chrome extension (MV3) that fills in what Sleeper's website leaves out for NBA and Premier League fantasy leagues, and adds a lineup optimizer for NFL.
 Unofficial and not affiliated with Sleeper.
-It uses the same endpoints as Sleeper's web app, which can change without notice.
+It uses the same endpoints as Sleeper's own apps, which can change without notice.
+
+## Features
+
+**NBA**
+- Team tab: roster, weekly game strips, projections, lineup swaps, Lock-In, taxi and IR moves, draft picks.
+- Matchup tab: both lineups slot by slot, win probability, Lock-In status.
+- Optimize lineup: proposes the best starters for the week and saves once you confirm.
+- Waiver bids and free-agent adds from Sleeper's own W and ADD buttons, plus your pending claims.
+- Player card: bio, game logs, career, news, transaction history.
+- Admin tools (off unless `?snp-admin=1`): what-if scoring on the Team and Matchup tabs and player card, adminFPTS and adminDelta columns on the Players tab.
+
+**NFL**
+- Optimize lineup button on Sleeper's own Team tab.
+
+**Premier League (EPL)**
+- Match, Team, Players and League tabs in place of Sleeper's "not supported on web yet" page.
+- Lineup swaps with formations, IR moves, Optimize lineup.
+- Free-agent adds, waiver bids and drops.
+- Player card with next match, projections, game log, career and history.
+
+**All sports**
+- API tab: a log of every call the extension makes, with status, timing, size and a JSON preview.
+
+Details: [docs/DETAILS.md](docs/DETAILS.md) (NBA and NFL) and [docs/EPL.md](docs/EPL.md) (Premier League).
 
 ## Privacy
 
@@ -15,21 +34,18 @@ Everything runs locally in your browser.
 There is no server: the extension only talks to Sleeper, the same way Sleeper's own site does.
 It calls `api.sleeper.app` and `sleeper.com` for league data, and loads player headshots, team logos and avatars from Sleeper's image CDN (`sleepercdn.com`).
 No data is sent to the author or any third party, and we never see your data or your Sleeper login.
-The only things it stores are a cached copy of Sleeper's public NBA player list and which team you picked per league, both in your browser's extension storage.
+The only things it stores are cached copies of Sleeper's public player lists and which team you picked per league, both in your browser's extension storage.
 
 ## Install
 
-1. Clone the repo: `git clone https://github.com/louhow/sleeper-basketball-chrome-extension.git`
+1. Clone the repo: `git clone https://github.com/louhow/sleeper-basketball-extension.git`
 2. Open `chrome://extensions` and turn on Developer mode.
 3. Click "Load unpacked" and pick the cloned directory.
-4. Visit `https://sleeper.com/leagues/<league id>/team` while logged in.
+4. Visit your league on `https://sleeper.com` while logged in (for NBA, the `/team` or `/matchup` tab).
 
-It only mounts for NBA leagues.
 Pick your team in the dropdown once; the choice is remembered per league.
-If the page has no empty Team tab to fill, it shows as a floating panel instead.
+If the page has no empty tab to fill, the panel shows as a floating panel instead.
 To update, `git pull`, hit the reload icon on the extension card, and refresh the Sleeper tab.
-
-See [docs/DETAILS.md](docs/DETAILS.md) for features, the API calls it makes, and tests.
 
 ## License
 

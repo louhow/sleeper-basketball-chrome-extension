@@ -1,5 +1,6 @@
-// Thin client for Sleeper's public endpoints that records every request it
-// makes, so the panel can show exactly which calls back the data on screen.
+// Thin client for Sleeper's endpoints that records every request it makes, so
+// the panel's API tab can show exactly which calls back the data on screen.
+// Shared by the NBA/NFL code (SNP) and the EPL panel (SEP).
 (globalThis.SNP ||= {}).createApi = (onChange) => {
   const REST = 'https://api.sleeper.app';
   const GRAPHQL = 'https://sleeper.com/graphql';
@@ -11,6 +12,7 @@
 
   function record(entry) {
     log.unshift({ id: nextId++, at: Date.now(), ...entry });
+    if (log.length > 300) log.length = 300;
     onChange();
     return log[0];
   }
@@ -23,7 +25,7 @@
       Object.assign(entry, { status: res.status, ms: performance.now() - started, bytes: text.length });
       if (entry.auth && (res.status === 401 || res.status === 403)) rejectedToken = entry.token;
       if (!res.ok) throw new Error(`${res.status} from ${entry.path}`);
-      entry.json = JSON.parse(text);
+      entry.json = text ? JSON.parse(text) : null;
       return entry.json;
     } catch (err) {
       if (entry.status === 'pending') Object.assign(entry, { status: 'error', ms: performance.now() - started });
@@ -66,11 +68,26 @@
       headers,
       body: JSON.stringify({ query, variables }),
     });
-    if (json.errors?.length) {
+    if (json?.errors?.length) {
       entry.error = json.errors.map((e) => e.message).join('; ');
       throw new Error(`${entry.error} from ${entry.path}`);
     }
     return json.data;
+  }
+
+  // Tries each query in turn and returns the first that Sleeper accepts, so a
+  // field one sport's schema lacks degrades to a smaller query instead of failing.
+  async function graphqlAny(label, queries, options) {
+    let last = null;
+    for (const query of queries) {
+      try {
+        return await graphql(label, query, options);
+      } catch (err) {
+        last = err;
+        if (/not logged in|^4\d\d|^5\d\d/i.test(err.message)) throw err;
+      }
+    }
+    throw last;
   }
 
   // Logs a response served from the extension's own cache instead of the network.
@@ -81,5 +98,5 @@
   // Logged in, but Sleeper turned the session down: the page needs a fresh login.
   const sessionExpired = () => rejectedToken != null && sessionToken() === rejectedToken;
 
-  return { get, graphql, cached, log, loggedIn: () => Boolean(sessionToken()), sessionExpired };
+  return { get, graphql, graphqlAny, cached, log, loggedIn: () => Boolean(sessionToken()), sessionExpired };
 };

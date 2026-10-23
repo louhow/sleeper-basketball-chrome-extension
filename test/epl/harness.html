@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- Stand-in for Sleeper's EPL league page, for looking at the panel without
+     loading the extension into Chrome. Public API calls go to Sleeper live;
+     logged-in calls stay off (there is no session token here). -->
+<html lang="en" data-sep-route="/leagues/1390809888657006592">
+<head>
+  <meta charset="utf-8">
+  <title>Sleeper EPL harness</title>
+  <style>
+    body { margin: 0; background: #0b1120; color: #fff; font-family: Lato, sans-serif; display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: #121a2a; padding: 20px; }
+    .main { flex: 1; display: flex; flex-direction: column; padding: 20px; min-width: 0; }
+    .postdraft-panel { flex: 1; display: flex; flex-direction: column; background: #18202f; border-radius: 12px; min-height: 0; overflow: hidden; }
+    .empty-panel-container { padding: 120px 20px; text-align: center; color: #8f9bb3; }
+    .chat { width: 300px; background: #121a2a; padding: 20px; }
+  </style>
+  <script>
+    // Minimal stand-in for the extension APIs the content script uses.
+    const store = {};
+    window.chrome = {
+      runtime: { getURL: (p) => `../../${p}` },
+      storage: {
+        local: {
+          get: async (keys) => {
+            const list = Array.isArray(keys) ? keys : [keys];
+            const out = {};
+            for (const k of list) {
+              try { const v = localStorage.getItem(`sep:${k}`); if (v != null) out[k] = JSON.parse(v); } catch {}
+            }
+            return out;
+          },
+          set: async (obj) => { for (const [k, v] of Object.entries(obj)) { try { localStorage.setItem(`sep:${k}`, JSON.stringify(v)); } catch {} } },
+        },
+        onChanged: { addListener() {} },
+      },
+    };
+    const params = new URLSearchParams(location.search);
+    if (params.get('league')) document.documentElement.dataset.sepRoute = `/leagues/${params.get('league')}`;
+    // ?noclass=1 drops Sleeper's NBA placeholder class, to exercise the text-based lookup.
+    if (params.get('noclass')) addEventListener('DOMContentLoaded', () => document.querySelector('.empty-panel-container')?.removeAttribute('class'));
+  </script>
+  <script src="../../src/api.js"></script>
+  <script src="../../src/epl/scoring.js"></script>
+  <script src="../../src/epl/model.js"></script>
+  <script src="../../src/epl/ui.js"></script>
+  <script src="../../src/epl/team.js"></script>
+  <script src="../../src/epl/matchup.js"></script>
+  <script src="../../src/epl/league.js"></script>
+  <script src="../../src/epl/players.js"></script>
+  <script src="../../src/epl/card.js"></script>
+  <script src="../../src/epl/dialogs.js"></script>
+  <script src="../../src/epl/view.js"></script>
+  <script src="../../src/epl/content.js"></script>
+</head>
+<body>
+  <div class="sidebar"><b>sleeper</b><p>Saturdays are for the goals</p></div>
+  <div class="main">
+    <h2>Saturdays are for the goals <small>2026 10-Team</small></h2>
+    <div class="postdraft-panel">
+      <div class="empty-panel-container">
+        <p>Fantasy CLUBSOCCER:EPL not supported on web yet</p>
+        <p>Please use the Sleeper mobile app</p>
+      </div>
+    </div>
+  </div>
+  <div class="chat"><b>League Chat</b></div>
+</body>
+</html>
