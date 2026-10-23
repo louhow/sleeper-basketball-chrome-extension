@@ -1257,7 +1257,7 @@ button.dp-row.selected:hover {
   font-size: 11px;
 }
 .dp-pts,
-.dp-gms {
+.dp-avg {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -1547,7 +1547,7 @@ button.optimize:hover:not(:disabled) {
 .op-head,
 .op-row {
   display: grid;
-  grid-template-columns: 112px 30px minmax(0, 1fr) 52px 36px;
+  grid-template-columns: 112px 30px minmax(0, 1fr) 52px 44px;
   align-items: center;
   column-gap: 10px;
 }
@@ -1578,7 +1578,7 @@ button.optimize:hover:not(:disabled) {
   font-weight: 700;
 }
 .op-row.out .dp-pts,
-.op-row.out .dp-gms {
+.op-row.out .dp-avg {
   color: var(--muted);
 }
 .op-move {

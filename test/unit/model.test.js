@@ -292,15 +292,41 @@ test('best lineup: scarce positions go to the players who can only fill them', (
   assert.deepEqual([plan.before, plan.after], [65, 70]);
 });
 
-test('best lineup: worth is projected points per game left, so no games left is worth nothing', () => {
+test('best lineup: picks for the next day of games, so a starter without one sits until their next game', () => {
+  // Thursday is next. Two plays and starts; one only plays Friday, so they wait for Friday's run.
   const l = optimizerLineup(['UTIL'], ['two'], ['one', 'done'], { two: ['PG'], one: ['SG'], done: ['SF'] }, {
-    two: [['t1', '2026-10-22', 'pre_game', 20], ['t2', '2026-10-24', 'pre_game', 10]],
+    two: [['t1', '2026-10-22', 'pre_game', 12], ['t2', '2026-10-24', 'pre_game', 10]],
     one: [['o1', '2026-10-23', 'pre_game', 16]],
     done: [['d1', '2026-10-20', 'complete', 50, 48]],
   });
   const plan = model.bestLineup(l, OPT_NOW);
-  assert.deepEqual(plain(plan.starters), ['one']);
-  assert.deepEqual(plain(plan.changes.map((c) => [c.id, c.perGame, c.gamesLeft])), [['one', 16, 1], ['two', 15, 2]]);
+  assert.equal(plan.date, '2026-10-22');
+  assert.deepEqual(plain(plan.changes), [], 'one has no game Thursday');
+  assert.deepEqual([plan.before, plan.after], [12, 12]);
+  // Friday: two's Thursday game is done, so one starts and two can come back Saturday.
+  l.week = optimizerWeek({
+    two: [['t1', '2026-10-22', 'complete', 12, 6], ['t2', '2026-10-24', 'pre_game', 15]],
+    one: [['o1', '2026-10-23', 'pre_game', 9]],
+    done: [['d1', '2026-10-20', 'complete', 50, 48]],
+  });
+  const fri = model.bestLineup(l, Date.parse('2026-10-23T12:00:00Z'));
+  assert.equal(fri.date, '2026-10-23');
+  assert.deepEqual(plain(fri.changes.map((c) => [c.id, c.to, c.today, c.perGame, c.gamesLeft, c.lost])),
+    [['one', 'UTIL', 9, 9, 1, null], ['two', 'BN', null, 15, 1, null]], 'two\'s 6 is not worth locking over a 15 projection');
+  assert.deepEqual([fri.before, fri.after], [0, 9]);
+});
+
+test('best lineup: slots no one can fill that day go to the best of the rest of the week', () => {
+  // Only thu plays Thursday. The other slot goes to sun (16 a game) over sat (10) and none (no games).
+  const l = optimizerLineup(['UTIL', 'UTIL'], ['sat', 'none'], ['sun', 'thu'], { sat: ['PG'], none: ['SG'], sun: ['SF'], thu: ['C'] }, {
+    sat: [['a1', '2026-10-24', 'pre_game', 10]],
+    none: [],
+    sun: [['s1', '2026-10-25', 'pre_game', 16]],
+    thu: [['t1', '2026-10-22', 'pre_game', 5]],
+  });
+  const plan = model.bestLineup(l, OPT_NOW);
+  assert.deepEqual(plain(plan.starters).sort(), ['sun', 'thu']);
+  assert.deepEqual([plan.before, plan.after], [0, 5]);
 });
 
 test('best lineup: benching a starter with a lockable finished game flags the lost score', () => {

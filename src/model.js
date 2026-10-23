@@ -268,11 +268,14 @@
   const SCORE_TIERS = [[24, 'green'], [15, 'yellow'], [-Infinity, 'red']];
   const scoreTier = (points) => SCORE_TIERS.find(([min]) => points >= min)[1];
 
-  // Lineup optimizer. A player's worth as a starter is what they're projected
-  // to score per game over the games they have left this week (0 with none
-  // left). A starter whose finished game can still be locked is worth at least
-  // that game's score, which benching them gives up. Locked players and players
-  // in a game right now stay put.
+  // Lineup optimizer. Under Lock-In a lineup can change every day, so it picks
+  // for the next day of games: a starter with no game that day can sit and come
+  // back later, while whoever plays gets a shot at a score worth locking. A
+  // player's worth is their projection that day; a starter whose finished game
+  // can still be locked, and beats what they're projected to score later, is
+  // worth at least that score, which benching them gives up. The rest of the
+  // week (projected points per game left) breaks ties. Locked players and
+  // players in a game right now stay put.
   const gameLive = (game, now) => game.status === 'in_game' ||
     (game.status === 'pre_game' && game.start != null && game.start <= now);
 
@@ -285,6 +288,7 @@
     return {
       perGame,
       gamesLeft: left.length,
+      left,
       banked,
       value: Math.max(perGame, banked?.actual ?? 0),
       fixed: st.locked ? 'locked' : st.games.some((d) => gameLive(d.game, now)) ? 'live' : null,
@@ -349,10 +353,12 @@
   }
 
   // The starting lineup with the highest total worth: every movable player is
-  // matched to an open slot they fit, or to the bench. Ties go to the lineup
-  // that moves the fewest players, then to players in their most specific slot.
-  //   worth(id): points a player is worth starting; fixedReason(id): why they can't move, or null.
-  function solveLineup({ slots, starters: current, bench, players, worth, fixedReason }) {
+  // matched to an open slot they fit, or to the bench. Ties go to the higher
+  // total `later`, then to the lineup that moves the fewest players, then to
+  // players in their most specific slot.
+  //   worth(id): points a player is worth starting; later(id): the tie-breaker;
+  //   fixedReason(id): why they can't move, or null.
+  function solveLineup({ slots, starters: current, bench, players, worth, later = () => 0, fixedReason }) {
     const real = (id) => id && id !== '0';
     const fixed = [];
     const open = [];
@@ -366,8 +372,11 @@
     const pool = [...current.filter((id, i) => real(id) && open.includes(i)), ...bench.filter((id) => !benchFixed.includes(id))];
 
     const slotOf = (i) => slots[i] ?? 'UTIL';
-    // Lexicographic in one number: points (to the cent) first, then staying put, then a specific slot.
-    const weight = (id, i) => Math.round(worth(id) * 100) * 1e6 + (current[i] === id ? 1000 : 0) + slotSpecificity(slotOf(i));
+    // Lexicographic in one number: worth (to the cent), then later (to the cent), then
+    // staying put, then a specific slot. Each tier's unit outweighs 20 players' worth of
+    // the tiers below it, and the totals stay exact in a double.
+    const cents = (x) => Math.max(0, Math.min(Math.round(x * 100), 9999));
+    const weight = (id, i) => cents(worth(id)) * 1e9 + cents(later(id)) * 4096 + (current[i] === id ? 128 : 0) + slotSpecificity(slotOf(i));
     const NO = 1e15; // can't play that slot
     // Rows: players. Columns: the open slots, then one bench spot per player.
     const cost = pool.map((id) => [
@@ -395,8 +404,7 @@
     return { starters, changes, fixed, before: total(current), after: total(starters) };
   }
 
-  // NBA (Lock-In): a player's worth is their projection per game left this week,
-  // or a starter's still-lockable finished score if that's more.
+  // NBA (Lock-In): the best lineup for the next day of games (`date`).
   function bestLineup(l, now = Date.now()) {
     if (!l.week) return null;
     const look = {};
@@ -405,19 +413,30 @@
     };
     l.starters.forEach((id) => id && id !== '0' && consider(id, true));
     l.bench.forEach((id) => consider(id, false));
+    const date = Object.values(look).map((o) => o.left[0]?.date).filter(Boolean).sort()[0] ?? null;
+    // A finished game is worth keeping only if it beats what the player is projected to score later.
+    const keep = (o) => (o.banked && o.banked.actual > 0 && o.banked.actual >= o.perGame ? o.banked : null);
+    const today = (id) => {
+      const o = look[id];
+      return Math.max(o.left.find((d) => d.date === date)?.proj ?? 0, keep(o)?.actual ?? 0);
+    };
     const plan = solveLineup({
       slots: l.slots, starters: l.starters, bench: l.bench, players: l.players,
-      worth: (id) => look[id].value,
+      worth: today,
+      later: (id) => look[id].value,
       fixedReason: (id) => look[id].fixed,
     });
+    plan.date = date;
     plan.changes = plan.changes.map((c) => {
-      const { perGame, gamesLeft, banked } = look[c.id];
-      const lost = c.to === 'BN' && banked?.actual > 0 ? banked : null;
+      const o = look[c.id];
+      const { perGame, gamesLeft, banked } = o;
+      // Benching a starter whose finished game could still be locked throws that score away.
+      const lost = c.to === 'BN' && banked?.actual > 0 && (keep(o) || scoreTier(banked.actual) === 'green') ? banked : null;
       return {
         ...c,
         perGame,
         gamesLeft,
-        // Benching a starter whose finished game could still be locked throws that score away.
+        today: o.left.find((d) => d.date === date)?.proj ?? null,
         lost,
         // A green score is worth stopping for; anything less is a softer warning.
         goodScore: Boolean(lost) && scoreTier(lost.actual) === 'green',

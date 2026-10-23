@@ -8,15 +8,13 @@
   // Plain text for the "How it picks" tooltip.
   const HOW = [
     'How it picks:',
-    '1. Every player gets a number: the points they are projected to score per game, averaged over the games they have left this week. No games left means 0.',
-    '2. A starter with a finished game you can still lock in is worth at least that game\'s score.',
-    '3. It tries every way to fit your players into the starting slots and keeps the lineup whose numbers add up highest. Players who fit only one slot (like a pure C) end up there, and versatile players fill G, F and UTIL.',
-    '4. Locked-in players, and anyone in a game right now, stay where they are.',
-    '5. When two lineups add up the same, it keeps the one that moves the fewest players.',
-    '6. Benching a starter whose finished game you could still lock throws that score away, since bench players can\'t lock in. It warns you, and if it was a green score (24 or more) you have to confirm it.',
+    'Starts your best projected players for the next day of games.',
+    'Starters without a game that day can sit. Run it again before their next one.',
+    'Keeps a finished game worth locking in, and leaves locked-in and live players alone.',
   ].join('\n');
 
   const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
+  const pts = (x) => (x == null ? '–' : f2(x));
   const gameText = (d) => `${weekday(d.date)} ${d.home ? 'vs' : '@'} ${d.opponent}`;
   const names = (list) => (list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0]);
 
@@ -44,7 +42,7 @@
     const body = plan.changes.length ? `
         ${summary(plan)}
         ${warning}
-        <div class="op-head"><span>Move</span><span>Player</span><span class="dp-pts" title="Projected points per game left">Pts/G</span><span class="dp-gms" title="Games left this week">Gms</span></div>
+        <div class="op-head"><span>Move</span><span>Player</span><span class="dp-pts" title="Projected points on ${esc(day(plan))}">${esc(day(plan))}</span><span class="dp-avg" title="Projected points per game left this week">Pts/G</span></div>
         ${plan.changes.map((c) => row(s, c)).join('')}
         ${fixed}`
       : `${summary(plan)}<p class="msg">This is already your best lineup for week ${esc(s.week)}.</p>${fixed}`;
@@ -61,11 +59,15 @@
       </footer>`, how);
   }
 
-  // The starters' projected points per game now and after the changes.
+  // The day the plan is for, e.g. "Fri".
+  const day = (plan) => (plan.date ? weekday(plan.date) : 'Day');
+
+  // The starters' projected points on that day now and after the changes.
   function summary(plan) {
     const gain = plan.after - plan.before;
     return `<div class="op-sum">
-      <span class="label">Lineup projection<span class="sub">Starters' points per game</span></span>
+      <span class="label">${plan.date ? `${esc(day(plan))} projection<span class="sub">Starters playing ${esc(day(plan))}</span>`
+        : 'Lineup projection<span class="sub">No games left this week</span>'}</span>
       <span class="nums"><b>${f2(plan.before)}</b><span class="arrow">→</span><b class="after">${f2(plan.after)}</b>
         ${plan.changes.length ? `<span class="gain${gain < 0 ? ' down' : ''}">${gain >= 0 ? '+' : ''}${f2(gain)}</span>` : ''}</span>
     </div>`;
@@ -85,8 +87,8 @@
         <span class="dp-name"><button class="name" data-player="${esc(c.id)}">${esc(p.name)}</button> ${positions(p)} <span class="team">- ${esc(p.team || 'FA')}</span>${injuryTag(p)}</span>
         ${sub}
       </span>
-      <span class="dp-pts">${f2(c.perGame)}</span>
-      <span class="dp-gms" title="${esc(games(c.gamesLeft))} left">${c.gamesLeft}</span>
+      <span class="dp-pts">${pts(c.today)}</span>
+      <span class="dp-avg" title="${esc(games(c.gamesLeft))} left">${f2(c.perGame)}</span>
     </div>`;
   }
 

@@ -1097,11 +1097,11 @@ test('optimize lineup: proposes changes, guards green scores, and saves only onc
   const before = sleeper.mutations.length;
   await page.locator(panel('button.optimize')).click();
   await page.locator(dialog('.op-row')).first().waitFor();
-  assert.match(await page.locator(dialog('.op-sum')).textContent(), /Lineup projection\s*Starters' points per game\s*\d+\.\d\d\s*→\s*\d+\.\d\d\s*\+\d+\.\d\d/);
+  assert.match(await page.locator(dialog('.op-sum')).textContent(), /(\w{3}) projection\s*Starters playing \1\s*\d+\.\d\d\s*→\s*\d+\.\d\d\s*\+\d+\.\d\d/);
   // The tooltip shows on hover, inside the dialog.
   assert.equal(await page.locator(dialog('.how-tip')).isVisible(), false);
   await page.locator(dialog('.how')).hover();
-  assert.match(await page.locator(dialog('.how-tip')).innerText(), /^How it picks:\n1\. Every player gets a number/);
+  assert.match(await page.locator(dialog('.how-tip')).innerText(), /^How it picks:\nStarts your best projected players/);
   await page.screenshot({ path: `${OUT}optimize-how.png` });
   await page.mouse.move(0, 0);
   // A small lockable score given up is a soft warning: yellow, and Apply still works.

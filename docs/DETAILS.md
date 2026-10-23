@@ -30,16 +30,19 @@ The projection follows Lock-In rules: an unlocked player scores their final game
 The Team tab's **Optimize lineup** button (your own team, a week you can still edit) proposes the best starting lineup and shows every change in a dialog before anything saves.
 Nothing is written until you press Apply; Cancel, ✕, the backdrop or Esc leave the lineup as it was.
 
-- Worth: a player's projected points per game, averaged over the games they have left this week (0 with none left). Out games project 0, so injuries count.
-- A starter with a finished game that can still be locked is worth at least that game's score.
+- It picks for the next day of games, since Lock-In lineups can change daily: a starter with no game that day can sit for someone who plays, and come back for their next game.
+  Run it again each game day.
+- Worth: a player's projection for that day (0 with no game). Out games project 0, so injuries count.
+- A starter with a finished game that can still be locked, scoring at least their projection per game left, is worth at least that score.
+- Slots no one can fill that day go to the players with the most projected points per game left this week.
 - Lineup: tries every way to fit the movable players into the starting slots and keeps the highest total, so scarce slots go to the players who can only fill them. Ties keep the most players where they are, then put players in their most specific slot.
 - Locked-in players and players in a game right now stay put.
-- Losses: benching a starter whose finished game could still be locked gives that score up (bench players can't lock in). The row turns yellow ("Can't lock 12.42 · Tue vs OKC") with a yellow note at the top; Apply still works.
+- Losses: benching a starter whose finished game was worth locking (or green) gives that score up (bench players can't lock in). The row turns yellow ("Can't lock 12.42 · Tue vs OKC") with a yellow note at the top; Apply still works.
 - Green scores (24+): giving one up turns the row red, explains it at the top, and keeps Apply ("Apply and lose N pts") disabled until you tick "Bench … anyway".
 - Scores in the dialog are colored by tier, like the game log.
 - Apply works the plan out again first; if a game tipped off meanwhile and the plan changed, it shows the new plan instead of saving. The lineup saves in one `update_matchup_leg` (in season) or `roster_update_starters`, leaving Lock-In picks untouched.
-- The top of the dialog shows the starters' projected points per game now and after the changes.
-- The dialog's "How it picks" label shows these rules on hover or focus.
+- The top of the dialog shows the starters' projected points for that day now and after the changes; each row shows that day's projection and points per game left.
+- The dialog's "How it picks" label sums these rules up in three lines on hover or focus.
 - Clicking a player in the dialog opens their player card over it; closing the card returns to the dialog.
 
 ### Matchup
