@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Sleeper Chrome Extension",
+  "name": "Sleeper Chrome Extension (unofficial)",
   "version": "1.0.0",
-  "description": "Fills in what Sleeper's website leaves out: NBA Team and Matchup tabs, waivers, Premier League tabs and lineup optimizers.",
+  "description": "Unofficial, not affiliated with Sleeper. Adds NBA Team and Matchup tabs, waivers, Premier League tabs and lineup optimizers.",
   "permissions": [
     "storage"
   ],

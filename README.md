@@ -1,8 +1,12 @@
-# Sleeper Chrome Extension
+# Sleeper Chrome Extension (unofficial)
+
+> [!WARNING]
+> **This is an UNOFFICIAL extension.**
+> It is not made, endorsed or supported by Sleeper, and is not affiliated with Sleeper in any way.
+> It uses the same endpoints as Sleeper's own apps, which can change or break without notice.
+> For help with Sleeper itself, contact Sleeper; for this extension, open an issue here.
 
 Chrome extension (MV3) that fills in what Sleeper's website leaves out, across sports.
-Unofficial and not affiliated with Sleeper.
-It uses the same endpoints as Sleeper's own apps, which can change without notice.
 
 ## Features
 
