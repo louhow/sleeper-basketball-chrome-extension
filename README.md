@@ -1,6 +1,6 @@
-# Sleeper Basketball Extension
+# Sleeper Extension
 
-Chrome extension (MV3) that fills in what Sleeper's website leaves out for NBA and Premier League fantasy leagues, and adds a lineup optimizer for NFL.
+Chrome extension (MV3) that fills in what Sleeper's website leaves out, across sports.
 Unofficial and not affiliated with Sleeper.
 It uses the same endpoints as Sleeper's own apps, which can change without notice.
 

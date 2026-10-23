@@ -2,7 +2,6 @@
 
 Sleeper's website shows only "Fantasy CLUBSOCCER:EPL not supported on web yet" for Premier League leagues (`sleeper.com/leagues/<id>`).
 The extension fills that page with the mobile app's tabs.
-This part was written by [Mitch Heard](https://github.com/mitchheard) in [mitchheard/sleeper-epl-chrome-extension](https://github.com/mitchheard/sleeper-epl-chrome-extension) and merged in here.
 
 ## What it shows
 

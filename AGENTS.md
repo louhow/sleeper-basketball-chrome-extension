@@ -1,6 +1,6 @@
-# Agent notes: Sleeper Basketball Chrome Extension
+# Agent notes: Sleeper Chrome Extension
 
-MV3 Chrome extension that fills Sleeper's web NBA Team and Matchup tabs and enables waivers, adds Optimize lineup for NFL, and fills the empty Premier League (EPL) page, using the same APIs as Sleeper's own apps.
+MV3 Chrome extension that fills in what Sleeper's website leaves out, across sports, using the same APIs as Sleeper's own apps. Today: NBA Team and Matchup tabs and waivers, NFL Optimize lineup, and the Premier League (EPL) page.
 User-facing docs: `README.md` (feature list, install, privacy), `docs/DETAILS.md` (NBA and NFL: features, API calls, tests) and `docs/EPL.md` (Premier League).
 
 ## Workflow
@@ -23,7 +23,7 @@ User-facing docs: `README.md` (feature list, install, privacy), `docs/DETAILS.md
 - `src/content.js`: one session per league (survives tab switches), data loading, saves, events. NFL leagues get `mountNfl` instead: the OPTIMIZE button and its dialog, nothing else. Renders into a shadow root that replaces Sleeper's "not yet available" placeholder; dialogs render in a separate page-level host.
 - `src/page-hook.js`: reads React props off Sleeper's W/ADD buttons and Players/Trend player rows, and hands clicks to the extension via `snp:player-action` / `snp:player-card` DOM events, only for leagues the extension marked NBA (`html[data-snp-nba-league]`). For NFL it reads the Team tab's lineup from Sleeper's Team component (`snp:nfl-lineup-request`) and saves through that component's own `updateMatchupLeg` (`snp:nfl-lineup-save`). On the NBA Players tab it adds the `adminFPTS` and `adminDelta` columns to Sleeper's table component, asking the extension for the what-if scores and rank shifts (`snp:admin-score-request`).
 - `src/panel.css`: all styles, inlined into each shadow root.
-- `src/epl/`: the Premier League panel (Match, Team, Players, League tabs, player card), merged from Mitch Heard's fork. Its own namespace (`globalThis.SEP`), its own content-script entry (the second in `manifest.json`, loaded after the first, so `SNP.createApi` exists) and its own `panel.css`; the only file it shares is `src/api.js`. It mounts only for `clubsoccer:epl` leagues. No automated tests yet: `test/epl/harness.html` is a stand-in page served on port 50030 (see `docs/EPL.md`); the unit tests' `loadSnp` loads only the first content-script entry.
+- `src/epl/`: the Premier League panel (Match, Team, Players, League tabs, player card). Its own namespace (`globalThis.SEP`), its own content-script entry (the second in `manifest.json`, loaded after the first, so `SNP.createApi` exists) and its own `panel.css`; the only file it shares is `src/api.js`. It mounts only for `clubsoccer:epl` leagues. No automated tests yet: `test/epl/harness.html` is a stand-in page served on port 50030 (see `docs/EPL.md`); the unit tests' `loadSnp` loads only the first content-script entry.
 - `test/unit` (node:test, `TZ=America/New_York`), `test/e2e/panel.test.js` (stand-in Sleeper pages, live public API, mocked authenticated GraphQL). Each e2e run also writes `test-results/e2e.tap`; read it when a run fails intermittently.
 
 ## Conventions and gotchas

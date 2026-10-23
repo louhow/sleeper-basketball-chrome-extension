@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Sleeper NBA",
+  "name": "Sleeper Extension",
   "version": "1.0.0",
-  "description": "Fills Sleeper's empty NBA Team and Matchup tabs (roster, schedule, projections, lineup swaps, Lock-In) and enables waiver bids and adds, plus a log of every API call it makes. Try other scoring from a corner control, with adminFPTS and adminDelta columns on the Players tab. On NFL Team tabs, adds Optimize lineup. Premier League (EPL) leagues get the app's Match, Team, Players and League tabs.",
+  "description": "Fills in what Sleeper's website leaves out: NBA Team and Matchup tabs, waivers, Premier League tabs and lineup optimizers.",
   "permissions": [
     "storage"
   ],
